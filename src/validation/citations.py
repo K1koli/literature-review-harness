@@ -31,9 +31,14 @@ class CitationVerifier:
         cited_ids = sorted(set(EVIDENCE_ID_RE.findall(text)))
         errors: list[dict[str, Any]] = []
         warnings: list[dict[str, Any]] = []
+        lowered = text.lower()
+        if "prompt processing error" in lowered or "error calling llm" in lowered:
+            errors.append({"issue": "model_error_response", "text": text[:180]})
         for evidence_id in cited_ids:
             if evidence_id not in known_ids:
                 errors.append({"issue": "unknown_evidence_id", "evidence_id": evidence_id})
+        if not known_ids:
+            errors.append({"issue": "empty_evidence_kb", "message": "build_literature_kb must run before final survey"})
 
         paragraphs = [part.strip() for part in re.split(r"\n\s*\n", text) if part.strip()]
         for index, paragraph in enumerate(paragraphs, start=1):

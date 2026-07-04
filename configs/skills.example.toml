@@ -1,0 +1,27 @@
+# Copy to configs/skills.toml to enable local external skills.
+# Keep third-party skill repos outside committed source unless their license
+# and size are appropriate for submission.
+
+[[skills]]
+name = "arxiv-paper-writer"
+path = "../SurveyHarness/external_skills/latex-arxiv-SKILL/.codex/skills/arxiv-paper-writer"
+roles = ["survey_writing", "latex_arxiv_export"]
+enabled = false
+allow_scripts = false
+max_chars = 6000
+
+[[skills]]
+name = "scientific-literature-review"
+path = "../SurveyHarness/external_skills/scientific-agent-skills/skills/literature-review"
+roles = ["research_framing", "survey_writing", "citation_grounding"]
+enabled = false
+allow_scripts = false
+max_chars = 6000
+
+[[skills]]
+name = "research-paper-writing"
+path = "../SurveyHarness/external_skills/Research-Paper-Writing-Skills/SKILL.md"
+roles = ["survey_writing"]
+enabled = false
+allow_scripts = false
+max_chars = 6000

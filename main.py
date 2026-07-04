@@ -14,6 +14,7 @@ import asyncio
 import json
 import os
 import sys
+from pathlib import Path
 
 from src.agent.context import ContextBuilder
 from src.agent.loop import AgentLoop
@@ -30,6 +31,11 @@ from src.tools.mineru import MinerUConfig, MINERU_FAST_PAGE_RANGES
 from src.tools.registry import ToolRegistry
 from src.utils.config import Config
 from src.validation.citations import CitationVerifier
+from src.skill_system.injection import SkillContextInjector
+from src.skill_system.manager import SkillManager
+from src.skill_system.router import SkillRouter
+from src.skill_system.tools import register_skill_tools
+from src.skill_system.trace import SkillTraceRecorder
 
 
 async def main():
@@ -63,6 +69,31 @@ async def main():
     registry.register(ReadContextTool(config.sciverse_api_token, kb))
 
     context = ContextBuilder()
+    project_root = Path(__file__).resolve().parent
+    skills_enabled = os.getenv("SKILLS_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
+    skill_trace = None
+    skill_injector = None
+    if skills_enabled:
+        skills_config = Path(os.getenv("SKILLS_CONFIG", "configs/skills.toml"))
+        if not skills_config.is_absolute():
+            skills_config = project_root / skills_config
+        skill_trace_path = Path(os.getenv("SKILLS_TRACE_PATH", "output/skill_trace.json"))
+        if not skill_trace_path.is_absolute():
+            skill_trace_path = project_root / skill_trace_path
+        skill_manager = SkillManager(project_root / "skills", external_config=skills_config)
+        skill_router = SkillRouter()
+        skill_trace = SkillTraceRecorder(skill_trace_path)
+        skill_injector = SkillContextInjector(
+            skill_manager,
+            skill_router,
+            skill_trace,
+            phase="literature_review",
+            topic="",
+            enabled=True,
+        )
+        context.add_pre_llm_hook(skill_injector)
+        register_skill_tools(registry, skill_manager, skill_router, skill_trace)
+
     verifier = CitationVerifier(kb)
 
     loop = AgentLoop(
@@ -94,6 +125,10 @@ async def main():
         result = await loop.run(user_message)
     finally:
         await llm.close()
+        if skill_injector is not None:
+            skill_injector.unload()
+        if skill_trace is not None:
+            skill_trace.save()
 
     # Save output and audit artifacts.
     output_dir = "output"
@@ -112,6 +147,8 @@ async def main():
     print(f"Survey saved to {survey_path}")
     print(f"Evidence pack saved to {evidence_path}")
     print(f"Check report saved to {check_path}")
+    if skill_trace is not None:
+        print(f"Skill trace saved to {skill_trace.output_path}")
     print(f"Total characters: {len(result)}")
 
 
