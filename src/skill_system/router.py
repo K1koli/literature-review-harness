@@ -5,6 +5,23 @@ from dataclasses import dataclass, field
 from .manager import SkillMetadata
 
 
+PHASE_MAX_SKILLS: dict[str, int] = {
+    "literature_review": 4,
+    "write": 3,
+    "verify": 2,
+    "figure": 2,
+    "revise": 2,
+    "export": 2,
+}
+
+PHASE_PREFERRED_SKILLS: dict[str, list[str]] = {
+    "literature_review": ["research-framing", "survey-writing", "citation-grounding", "agent-literature-review"],
+    "write": ["survey-writing", "agent-survey-generation", "agent-related-work-writing"],
+    "verify": ["citation-grounding", "agent-literature-review"],
+    "figure": ["agent-figure-generation"],
+}
+
+
 @dataclass(frozen=True)
 class SkillRouteDecision:
     phase: str
@@ -40,18 +57,23 @@ class SkillRouter:
             return SkillRouteDecision(phase=phase, selected_names=selected, roles=roles, reason=reason, available_names=available)
 
         wanted = {_normalize(role) for role in roles}
-        selected: list[str] = []
+        matching = []
         for meta in candidates:
             meta_roles = {_normalize(role) for role in meta.roles}
-            if meta.enabled and (meta_roles & wanted):
-                selected.append(meta.name)
+            overlap = meta_roles & wanted
+            if meta.enabled and overlap:
+                matching.append(meta)
+        preferred = PHASE_PREFERRED_SKILLS.get(phase, [])
+        matching = sorted(matching, key=lambda meta: _priority(meta, wanted, preferred))
+        max_selected = PHASE_MAX_SKILLS.get(phase, len(matching))
+        selected = [meta.name for meta in matching[:max_selected]]
         return SkillRouteDecision(
             phase=phase,
             selected_names=selected,
             roles=roles,
             reason=(
                 f"selected skills whose metadata roles match phase '{phase}' for topic '{topic}'; "
-                "full instructions are loaded only after routing"
+                f"full instructions are loaded only after routing; capped at {max_selected} skill(s)"
             ),
             available_names=available,
         )
@@ -59,3 +81,12 @@ class SkillRouter:
 
 def _normalize(value: str) -> str:
     return value.lower().replace("-", "_").replace(" ", "_")
+
+
+def _priority(meta: SkillMetadata, wanted: set[str], preferred: list[str]) -> tuple[int, int, int, int, str]:
+    roles = {_normalize(role) for role in meta.roles}
+    overlap_count = len(roles & wanted)
+    preferred_rank = preferred.index(meta.name) if meta.name in preferred else 999
+    source_rank = 0 if meta.source == "builtin" else 1
+    role_specificity = len(roles)
+    return (preferred_rank, source_rank, -overlap_count, role_specificity, meta.name)

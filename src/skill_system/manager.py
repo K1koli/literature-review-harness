@@ -12,6 +12,8 @@ PHASE_ROLES: dict[str, list[str]] = {
     "retrieve": ["academic_search"],
     "write": ["research_framing", "survey_writing"],
     "verify": ["citation_grounding"],
+    "revise": ["paper_revision", "academic_polishing", "self_review"],
+    "figure": ["figure_planning", "figure_generation", "figure_verification"],
     "export": ["latex_arxiv_export"],
 }
 

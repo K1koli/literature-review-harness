@@ -94,6 +94,69 @@ class SkillSystemTest(unittest.TestCase):
             self.assertIn("Survey Writing Skill", loaded)
             self.assertIn("survey-writing", unloaded)
 
+    def test_configured_nested_skill_path_can_be_loaded_without_recursive_scan(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            nested = root / "skills" / "third-party-pack" / "skills" / "figure-generation"
+            nested.mkdir(parents=True)
+            (nested / "SKILL.md").write_text(
+                "---\n"
+                "name: upstream-figure-generation\n"
+                "description: Figure generation protocol.\n"
+                "---\n\n"
+                "# Upstream Figure Generation\n\n"
+                "Build evidence-grounded figure briefs.",
+                encoding="utf-8",
+            )
+            config = root / "configs" / "skills.toml"
+            config.parent.mkdir()
+            config.write_text(
+                '[[skills]]\n'
+                'name = "configured-figure-generation"\n'
+                'path = "skills/third-party-pack/skills/figure-generation"\n'
+                'roles = ["figure_planning", "figure_generation"]\n'
+                'enabled = true\n'
+                'allow_scripts = false\n'
+                'max_chars = 2000\n',
+                encoding="utf-8",
+            )
+
+            manager = SkillManager(root / "skills", external_config=config)
+            figure_context = manager.load_for_phase("figure")
+
+            self.assertIn("configured-figure-generation", figure_context.names)
+            self.assertIn("Build evidence-grounded figure briefs", figure_context.render())
+
+    def test_router_caps_phase_skill_selection(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            skills_root = root / "skills"
+            for name, role in [
+                ("research-framing", "research_framing"),
+                ("survey-writing", "survey_writing"),
+                ("citation-grounding", "citation_grounding"),
+                ("external-literature", "research_framing"),
+                ("external-survey", "survey_writing"),
+                ("external-related", "survey_writing"),
+            ]:
+                skill_dir = skills_root / name
+                skill_dir.mkdir(parents=True)
+                (skill_dir / "SKILL.md").write_text(
+                    f"---\nname: {name}\nroles: [{role}]\ndescription: {name}\n---\n\n# {name}\n",
+                    encoding="utf-8",
+                )
+
+            manager = SkillManager(skills_root)
+            decision = SkillRouter().route(
+                phase="literature_review",
+                topic="World Models",
+                candidates=manager.list(),
+                roles=["research_framing", "survey_writing", "citation_grounding"],
+            )
+
+            self.assertLessEqual(len(decision.selected_names), 4)
+            self.assertIn("citation-grounding", decision.selected_names)
+
 
 if __name__ == "__main__":
     unittest.main()

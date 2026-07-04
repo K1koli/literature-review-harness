@@ -1,27 +1,143 @@
 # Copy to configs/skills.toml to enable local external skills.
-# Keep third-party skill repos outside committed source unless their license
-# and size are appropriate for submission.
+# configs/skills.toml is ignored by git so each collaborator can tune it locally.
+#
+# The built-in skills under ./skills/research-framing, ./skills/survey-writing,
+# and ./skills/citation-grounding are always discoverable. The entries below
+# are optional third-party skill paths. They are disabled by default because
+# third-party skill repos are intentionally not vendored in this repository.
 
 [[skills]]
-name = "arxiv-paper-writer"
-path = "../SurveyHarness/external_skills/latex-arxiv-SKILL/.codex/skills/arxiv-paper-writer"
-roles = ["survey_writing", "latex_arxiv_export"]
-enabled = false
-allow_scripts = false
-max_chars = 6000
-
-[[skills]]
-name = "scientific-literature-review"
-path = "../SurveyHarness/external_skills/scientific-agent-skills/skills/literature-review"
+name = "agent-literature-review"
+path = "skills/agent-research-skills/skills/literature-review"
 roles = ["research_framing", "survey_writing", "citation_grounding"]
 enabled = false
 allow_scripts = false
-max_chars = 6000
+max_chars = 4000
 
 [[skills]]
-name = "research-paper-writing"
-path = "../SurveyHarness/external_skills/Research-Paper-Writing-Skills/SKILL.md"
+name = "agent-survey-generation"
+path = "skills/agent-research-skills/skills/survey-generation"
 roles = ["survey_writing"]
 enabled = false
 allow_scripts = false
-max_chars = 6000
+max_chars = 3000
+
+[[skills]]
+name = "agent-related-work-writing"
+path = "skills/agent-research-skills/skills/related-work-writing"
+roles = ["survey_writing"]
+enabled = false
+allow_scripts = false
+max_chars = 3000
+
+[[skills]]
+name = "agent-figure-generation"
+path = "skills/agent-research-skills/skills/figure-generation"
+roles = ["figure_planning", "figure_generation", "figure_verification"]
+enabled = false
+allow_scripts = false
+max_chars = 4000
+
+[[skills]]
+name = "agent-citation-management"
+path = "skills/agent-research-skills/skills/citation-management"
+roles = ["citation_grounding"]
+enabled = false
+allow_scripts = false
+max_chars = 3000
+
+[[skills]]
+name = "agent-self-review"
+path = "skills/agent-research-skills/skills/self-review"
+roles = ["self_review", "academic_polishing"]
+enabled = false
+allow_scripts = false
+max_chars = 3000
+
+[[skills]]
+name = "agent-paper-revision"
+path = "skills/agent-research-skills/skills/paper-revision"
+roles = ["paper_revision", "academic_polishing"]
+enabled = false
+allow_scripts = false
+max_chars = 3000
+
+[[skills]]
+name = "asta-skill"
+path = "skills/asta-skill/skills/asta-skill"
+roles = ["academic_search", "research_framing"]
+enabled = false
+allow_scripts = false
+max_chars = 4000
+
+[[skills]]
+name = "nature-academic-search"
+path = "skills/nature-skills/skills/nature-academic-search"
+roles = ["academic_search"]
+enabled = false
+allow_scripts = false
+max_chars = 4000
+
+[[skills]]
+name = "nature-writing"
+path = "skills/nature-skills/skills/nature-writing"
+roles = ["survey_writing", "academic_polishing"]
+enabled = false
+allow_scripts = false
+max_chars = 4000
+
+[[skills]]
+name = "nature-polishing"
+path = "skills/nature-skills/skills/nature-polishing"
+roles = ["academic_polishing"]
+enabled = false
+allow_scripts = false
+max_chars = 3000
+
+[[skills]]
+name = "craft-of-research"
+path = "skills/craft-of-research/skills/craft-of-research"
+roles = ["research_framing"]
+enabled = false
+allow_scripts = false
+max_chars = 4000
+
+[[skills]]
+name = "research-paper-writing"
+path = "skills/Research-Paper-Writing-Skills/research-paper-writing"
+roles = ["survey_writing", "academic_polishing"]
+enabled = false
+allow_scripts = false
+max_chars = 4000
+
+[[skills]]
+name = "arxiv-paper-writer"
+path = "skills/latex-arxiv-SKILL/.codex/skills/arxiv-paper-writer"
+roles = ["survey_writing", "latex_arxiv_export"]
+enabled = false
+allow_scripts = false
+max_chars = 4000
+
+[[skills]]
+name = "scientific-literature-review"
+path = "skills/scientific-agent-skills/skills/literature-review"
+roles = ["research_framing", "survey_writing", "citation_grounding"]
+enabled = false
+allow_scripts = false
+max_chars = 4000
+
+[[skills]]
+name = "scientific-writing"
+path = "skills/scientific-agent-skills/skills/scientific-writing"
+roles = ["survey_writing", "academic_polishing"]
+enabled = false
+allow_scripts = false
+max_chars = 4000
+
+[[skills]]
+name = "scientific-infographics"
+path = "skills/scientific-agent-skills/skills/infographics"
+roles = ["figure_planning", "figure_generation"]
+enabled = false
+allow_scripts = false
+max_chars = 3000
