@@ -22,8 +22,8 @@ class Config:
     def from_env(cls) -> "Config":
         return cls(
             intern_api_base=os.getenv("INTERN_API_BASE", "https://chat.intern-ai.org.cn/api/v1"),
-            intern_api_key=os.getenv("INTERN_API_KEY", ""),
-            sciverse_api_token=os.getenv("SCIVERSE_API_TOKEN", ""),
+            intern_api_key=os.getenv("INTERN_API_KEY", os.getenv("API_KEY", "")),
+            sciverse_api_token=os.getenv("SCIVERSE_API_TOKEN", os.getenv("SCIVERSE_API_KEY", "")),
             mineru_api_token=os.getenv("MINERU_API_TOKEN", os.getenv("MINERU_API_KEY", "")),
             mineru_enabled=os.getenv("MINERU_ENABLED", "true").lower() in {"1", "true", "yes"},
             mineru_timeout=int(os.getenv("MINERU_TIMEOUT", "600")),
