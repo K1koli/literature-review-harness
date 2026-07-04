@@ -52,6 +52,26 @@ python main.py "World Models in deep reinforcement learning"
 - `output/evidence_pack.json`：论文、evidence、MinerU 状态审计包
 - `output/check_report.json`：引用校验报告
 
+## Demo 前端
+
+启动本地展示界面：
+
+```bash
+python -m src.demo.server --host 127.0.0.1 --port 8000
+```
+
+打开 `http://127.0.0.1:8000`。界面支持：
+
+- 输入任意综述主题并启动真实 Harness
+- 通过 SSE 实时显示 AgentLoop、工具调用、CitationVerifier 等运行事件
+- 运行完成后自动收起灰色 trace，并渲染排版后的 Markdown 综述
+- 展示 evidence timeline、source mix、harness pipeline 等图文摘要
+- 预览 PDF，并下载 `survey.md`、`survey.pdf`、`evidence_pack.json`、`check_report.json`
+
+如果本机已有 `output/survey.md`、`output/evidence_pack.json`、`output/check_report.json`，可以点 `Sample` 复用这份输出进行快速展示；`Generate` 始终走真实 API 和当前 Harness。
+
+后端入口在 `src/demo/server.py`，真实运行复用 `src/review_runner.py`，不会绕过 Evidence KB 或 CitationVerifier。
+
 ## 工具列表
 
 | 工具 | 功能 |
