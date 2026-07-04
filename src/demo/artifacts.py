@@ -12,9 +12,12 @@ EVIDENCE_ID_RE = re.compile(r"\bP\d{2,4}-E\d{2,3}\b")
 
 def load_review_payload(run_id: str, output_dir: Path, topic: str, status: str, error: str = "") -> dict[str, Any]:
     survey_path = output_dir / "survey.md"
+    html_path = output_dir / "survey.html"
+    tex_path = output_dir / "survey.tex"
     evidence_path = output_dir / "evidence_pack.json"
     check_path = output_dir / "check_report.json"
     trace_path = output_dir / "skill_trace.json"
+    figure_plan_path = output_dir / "figure_plan.json"
     pdf_path = output_dir / "survey.pdf"
 
     markdown = survey_path.read_text(encoding="utf-8") if survey_path.exists() else ""
@@ -33,11 +36,14 @@ def load_review_payload(run_id: str, output_dir: Path, topic: str, status: str, 
         "check_report": check_report,
         "downloads": {
             "markdown": f"/api/reviews/{run_id}/download/survey.md" if survey_path.exists() else "",
+            "html": f"/api/reviews/{run_id}/download/survey.html" if html_path.exists() else "",
+            "latex": f"/api/reviews/{run_id}/download/survey.tex" if tex_path.exists() else "",
             "pdf": f"/api/reviews/{run_id}/download/survey.pdf" if pdf_path.exists() else "",
             "pdf_preview": f"/api/reviews/{run_id}/preview/survey.pdf" if pdf_path.exists() else "",
             "evidence": f"/api/reviews/{run_id}/download/evidence_pack.json" if evidence_path.exists() else "",
             "check_report": f"/api/reviews/{run_id}/download/check_report.json" if check_path.exists() else "",
             "skill_trace": f"/api/reviews/{run_id}/download/skill_trace.json" if trace_path.exists() else "",
+            "figure_plan": f"/api/reviews/{run_id}/download/figure_plan.json" if figure_plan_path.exists() else "",
         },
     }
 

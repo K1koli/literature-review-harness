@@ -25,9 +25,20 @@ async def main() -> None:
         sys.exit(1)
 
     print(f"\n{'=' * 60}")
+    print(f"Run directory: {artifacts.run_dir}")
     print(f"Survey saved to {artifacts.survey_path}")
+    print(f"HTML survey saved to {artifacts.html_path}")
+    print(f"LaTeX survey saved to {artifacts.tex_path}")
     print(f"Evidence pack saved to {artifacts.evidence_path}")
     print(f"Check report saved to {artifacts.check_path}")
+    if artifacts.image_result.enabled:
+        print(f"Generated images: {len(artifacts.image_result.generated)}")
+        if artifacts.image_result.manifest_path:
+            print(f"Image manifest saved to {artifacts.image_result.manifest_path}")
+        if artifacts.image_result.errors:
+            print(f"Image generation errors: {len(artifacts.image_result.errors)}")
+    else:
+        print(f"Image generation skipped: {artifacts.image_result.skipped_reason}")
     if artifacts.skill_trace_path is not None:
         print(f"Skill trace saved to {artifacts.skill_trace_path}")
     print(f"Total characters: {artifacts.total_characters}")

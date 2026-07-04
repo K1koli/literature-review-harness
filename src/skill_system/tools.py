@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from .manager import SkillManager
+from .manager import PHASE_ROLES, SkillManager
 from .router import SkillRouter
 from .trace import SkillTraceRecorder
 
@@ -58,7 +58,7 @@ class SkillRouteForPhaseTool:
         self.trace = trace
 
     async def execute(self, phase: str, topic: str = "", roles: list[str] | None = None) -> str:
-        role_list = roles or sorted({role for meta in self.manager.select(phase) for role in meta.roles})
+        role_list = roles or PHASE_ROLES.get(phase, [])
         decision = self.router.route(phase=phase, topic=topic, candidates=self.manager.list(), roles=role_list)
         self.trace.record(
             phase=phase,
@@ -85,16 +85,26 @@ class SkillLoadForPhaseTool:
     description = "Load full skill instructions for a phase after metadata routing."
     parameters = {
         "type": "object",
-        "properties": {"phase": {"type": "string", "description": "Harness phase."}},
+        "properties": {
+            "phase": {"type": "string", "description": "Harness phase."},
+            "topic": {"type": "string", "description": "Current topic.", "default": ""},
+            "roles": {"type": "array", "items": {"type": "string"}, "description": "Optional role override."},
+        },
         "required": ["phase"],
     }
 
-    def __init__(self, manager: SkillManager, trace: SkillTraceRecorder):
+    def __init__(self, manager: SkillManager, trace: SkillTraceRecorder, router: SkillRouter | None = None):
         self.manager = manager
         self.trace = trace
+        self.router = router
 
-    async def execute(self, phase: str) -> str:
-        context = self.manager.load_for_phase(phase)
+    async def execute(self, phase: str, topic: str = "", roles: list[str] | None = None) -> str:
+        if self.router is not None:
+            role_list = roles or PHASE_ROLES.get(phase, [])
+            decision = self.router.route(phase=phase, topic=topic, candidates=self.manager.list(), roles=role_list)
+            context = self.manager.load_names(decision.selected_names, phase=phase)
+        else:
+            context = self.manager.load_for_phase(phase, extra_roles=roles)
         injected_chars = sum(len(skill.content) for skill in context.active)
         self.trace.record(
             phase=phase,
@@ -204,7 +214,7 @@ class SkillRunScriptTool:
 def register_skill_tools(registry: Any, manager: SkillManager, router: SkillRouter, trace: SkillTraceRecorder) -> None:
     registry.register(SkillListIndexTool(manager, trace))
     registry.register(SkillRouteForPhaseTool(manager, router, trace))
-    registry.register(SkillLoadForPhaseTool(manager, trace))
+    registry.register(SkillLoadForPhaseTool(manager, trace, router))
     registry.register(SkillUnloadTool(manager, trace))
     registry.register(SkillResourceIndexTool(manager, trace))
     registry.register(SkillReadResourceTool(manager, trace))

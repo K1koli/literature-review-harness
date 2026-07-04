@@ -1,0 +1,28 @@
+# Copy to configs/config.toml and fill local secrets there.
+# configs/config.toml is ignored by git.
+
+[llm]
+base_url_env = "INTERN_API_BASE"
+api_key_env = "INTERN_API_KEY"
+model = "intern-s2-preview"
+
+[sciverse]
+token_env = "SCIVERSE_API_TOKEN"
+
+[mineru]
+token_env = "MINERU_API_TOKEN"
+
+[runtime]
+skip_mineru = false
+timeout_seconds = 600
+
+[image_generation]
+enabled = false
+api_key_env = "OPENAI_API_KEY"
+base_url = "https://api.openai.com/v1"
+endpoint_path = "/images/generations"
+model = "gpt-image-1"
+size = "1536x1024"
+quality = "low"
+count = 1
+timeout_seconds = 180

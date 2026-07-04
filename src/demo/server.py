@@ -196,10 +196,13 @@ class DemoHandler(BaseHTTPRequestHandler):
     def _serve_artifact(self, state: RunState, filename: str, *, attachment: bool) -> None:
         allowed = {
             "survey.md",
+            "survey.html",
+            "survey.tex",
             "survey.pdf",
             "evidence_pack.json",
             "check_report.json",
             "skill_trace.json",
+            "figure_plan.json",
         }
         if filename not in allowed:
             self.send_error(HTTPStatus.NOT_FOUND, "Artifact not found")

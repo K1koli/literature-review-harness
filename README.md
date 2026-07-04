@@ -13,7 +13,8 @@
   -> MinerU 以快模式尝试解析可访问全文
   -> LLM 通过 list_evidence/read_evidence/read_context 补证据
   -> CitationVerifier 检查最终 Markdown 引用
-  -> 输出 survey.md + evidence_pack.json + check_report.json
+  -> 可选 OpenAI 图片生成后处理
+  -> 输出 output/runs/YYYYMMDD-HHMM-topic/ 运行包
 ```
 
 Evidence id 形如 `P001-E01`。最终综述中的实质性段落必须引用这些 id，例如 `[P001-E01]`，不能自由编造论文、作者、结论，也不能再使用旧的 `[doc_id, offset]` 作为最终引用格式。
@@ -38,6 +39,13 @@ MINERU_ENABLED=true
 MINERU_TIMEOUT=600
 MINERU_BATCH_SIZE=1
 MINERU_FAST=true
+
+# 可选。默认关闭，开启后会在当前 run 的 figures/ 生成综述配图。
+IMAGE_GENERATION_ENABLED=false
+OPENAI_API_KEY=sk-xxx
+OPENAI_IMAGE_MODEL=gpt-image-1
+OPENAI_IMAGE_SIZE=1536x1024
+OPENAI_IMAGE_QUALITY=low
 ```
 
 运行原命令仍可用：
@@ -48,9 +56,17 @@ python main.py "World Models in deep reinforcement learning"
 
 输出文件：
 
-- `output/survey.md`：最终 Markdown 综述
-- `output/evidence_pack.json`：论文、evidence、MinerU 状态审计包
-- `output/check_report.json`：引用校验报告
+- `output/runs/YYYYMMDD-HHMM-topic/survey.md`：最终 Markdown 综述
+- `output/runs/YYYYMMDD-HHMM-topic/survey.html`：科研风格 HTML 展示版
+- `output/runs/YYYYMMDD-HHMM-topic/survey.tex`：基础 LaTeX 导出版
+- `output/runs/YYYYMMDD-HHMM-topic/evidence_pack.json`：论文、evidence、MinerU 状态审计包
+- `output/runs/YYYYMMDD-HHMM-topic/check_report.json`：引用校验报告
+- `output/runs/YYYYMMDD-HHMM-topic/skill_trace.json`：Skill 路由和加载审计
+- `output/runs/YYYYMMDD-HHMM-topic/figure_plan.json`：章节级图片计划
+- `output/runs/YYYYMMDD-HHMM-topic/figures/`：图片和 SVG 图
+- `output/latest_run.json`：最近一次运行的路径索引
+
+为兼容旧脚本，最近一次运行也会同步到 `output/survey.md`、`output/survey.html`、`output/survey.tex` 等顶层副本。
 
 ## Demo 前端
 
@@ -81,6 +97,30 @@ python -m src.demo.server --host 127.0.0.1 --port 8000
 | `read_evidence` | 按 evidence id 读取完整证据文本 |
 | `search_literature` | 追加 Sciverse semantic 检索结果为 evidence |
 | `read_context` | 读取 Sciverse 上下文并包装成 evidence |
+
+## 图片生成
+
+图片生成是可选后处理，不进入 citation verifier，也不会阻断正文生成。开启方式：
+
+```toml
+[image_generation]
+enabled = true
+api_key_env = "OPENAI_API_KEY"
+base_url = "https://api.openai.com/v1"
+endpoint_path = "/images/generations"
+model = "gpt-image-1"
+size = "1536x1024"
+quality = "low"
+count = 1
+timeout_seconds = 180
+```
+
+设计原则：
+
+- prompt 来自最终 `survey.md` 和 Evidence KB 的论文元数据
+- 图片只做概念图、时间线、方法图等表达层内容
+- 不要求图片写精确论文题名、作者、DOI 或 citation id
+- factual claims 仍然只由正文中的 evidence id 支撑
 
 ## MinerU 策略
 
@@ -114,6 +154,11 @@ literature-review-harness/
 │   │   └── loop.py
 │   ├── llm/
 │   │   └── client.py
+│   ├── images/
+│   │   ├── generator.py
+│   │   ├── pipeline.py
+│   │   ├── planner.py
+│   │   └── vector.py
 │   ├── state/
 │   │   └── kb.py
 │   ├── tools/

@@ -21,6 +21,8 @@ const els = {
   citedCount: document.getElementById("citedCount"),
   citationStatus: document.getElementById("citationStatus"),
   downloadMd: document.getElementById("downloadMd"),
+  downloadHtml: document.getElementById("downloadHtml"),
+  downloadTex: document.getElementById("downloadTex"),
   downloadPdf: document.getElementById("downloadPdf"),
   downloadEvidence: document.getElementById("downloadEvidence"),
 };
@@ -185,6 +187,8 @@ function renderMetrics(summary) {
 
 function renderDownloads(downloads) {
   setLink(els.downloadMd, downloads.markdown);
+  setLink(els.downloadHtml, downloads.html);
+  setLink(els.downloadTex, downloads.latex);
   setLink(els.downloadPdf, downloads.pdf);
   setLink(els.downloadEvidence, downloads.evidence);
 }
