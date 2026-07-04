@@ -5,13 +5,15 @@ const els = {
   sampleButton: document.getElementById("sampleButton"),
   statusDot: document.getElementById("statusDot"),
   statusText: document.getElementById("statusText"),
+  messageList: document.getElementById("messageList"),
+  welcomeMessage: document.getElementById("welcomeMessage"),
+  userMessage: document.getElementById("userMessage"),
+  userText: document.getElementById("userText"),
+  assistantMessage: document.getElementById("assistantMessage"),
   tracePanel: document.getElementById("tracePanel"),
   traceSummary: document.getElementById("traceSummary"),
   traceLog: document.getElementById("traceLog"),
-  visualSummary: document.getElementById("visualSummary"),
-  pipeline: document.getElementById("pipeline"),
-  timelineBars: document.getElementById("timelineBars"),
-  sourceBars: document.getElementById("sourceBars"),
+  answerPanel: document.getElementById("answerPanel"),
   markdownView: document.getElementById("markdownView"),
   pdfView: document.getElementById("pdfView"),
   pdfObject: document.getElementById("pdfObject"),
@@ -40,6 +42,11 @@ els.sampleButton.addEventListener("click", () => {
   startRun("/api/reviews/sample");
 });
 
+els.topic.addEventListener("input", () => {
+  els.topic.style.height = "auto";
+  els.topic.style.height = `${Math.min(160, els.topic.scrollHeight)}px`;
+});
+
 document.querySelectorAll(".tab-btn").forEach((button) => {
   button.addEventListener("click", () => setTab(button.dataset.tab));
 });
@@ -58,7 +65,7 @@ async function startRun(endpoint) {
     setStatus("error", "Topic is required");
     return;
   }
-  resetRun();
+  resetRun(topic);
   setStatus("running", endpoint.endsWith("sample") ? "Loading sample" : "Running harness");
   const response = await fetch(endpoint, {
     method: "POST",
@@ -68,6 +75,7 @@ async function startRun(endpoint) {
   const data = await response.json();
   if (!response.ok) {
     setStatus("error", data.error || "Request failed");
+    appendTrace({ type: "run_failed", message: data.error || "Request failed" });
     return;
   }
   activeRunId = data.run_id;
@@ -108,29 +116,35 @@ async function loadRun(runId) {
   renderDownloads(payload.downloads || {});
   if (payload.markdown) {
     els.markdownView.innerHTML = renderMarkdown(payload.markdown);
-    renderVisuals(payload.summary || {});
-    els.visualSummary.hidden = false;
+    els.answerPanel.hidden = false;
   }
   if (payload.downloads?.pdf_preview) {
     els.pdfObject.data = payload.downloads.pdf_preview;
   }
+  scrollToBottom();
 }
 
-function resetRun() {
+function resetRun(topic) {
   if (activeSource) activeSource.close();
   activeSource = null;
   activeRunId = "";
   currentPayload = null;
+  els.welcomeMessage.hidden = true;
+  els.userText.textContent = topic;
+  els.userMessage.hidden = false;
+  els.assistantMessage.hidden = false;
   els.traceLog.innerHTML = "";
   els.traceSummary.textContent = "Starting";
   els.tracePanel.open = true;
-  els.visualSummary.hidden = true;
-  els.markdownView.innerHTML = `<div class="empty-state"><strong>Running</strong><span>Harness events will appear above.</span></div>`;
+  els.answerPanel.hidden = true;
+  els.markdownView.innerHTML = "";
   els.pdfObject.removeAttribute("data");
+  els.evidenceFocus.hidden = true;
+  els.evidenceFocus.innerHTML = "";
   renderMetrics({});
   renderDownloads({});
   setTab("markdown");
-  els.evidenceFocus.innerHTML = `<p class="panel-label">Evidence focus</p><p class="muted">Select an evidence id in the article.</p>`;
+  scrollToBottom();
 }
 
 function setStatus(kind, text) {
@@ -156,7 +170,7 @@ function formatTraceEvent(event) {
     return `<strong>Tool</strong> ${escapeHtml(event.name)} <code>${escapeHtml(JSON.stringify(event.arguments || {}))}</code>`;
   }
   if (type === "tool_call_finished") {
-    return `<strong>Tool result</strong> ${escapeHtml(event.name)} <code>${escapeHtml(shorten(event.result_preview || "", 300))}</code>`;
+    return `<strong>Tool result</strong> ${escapeHtml(event.name)} <code>${escapeHtml(shorten(event.result_preview || "", 260))}</code>`;
   }
   if (type === "llm_response" && event.mode === "tool_calls") {
     return `<strong>LLM</strong> requested ${event.tool_call_count || 0} tool call(s): <code>${escapeHtml((event.tool_names || []).join(", "))}</code>`;
@@ -167,6 +181,9 @@ function formatTraceEvent(event) {
   if (type === "stop_condition") {
     const status = event.passed ? "passed" : "failed";
     return `<strong>${escapeHtml(event.name || "Verifier")}</strong> ${status} <code>${escapeHtml(JSON.stringify(event.report || {}))}</code>`;
+  }
+  if (type === "image_generation_finished") {
+    return `<strong>Images</strong> ${event.enabled ? `${event.generated || 0} generated` : "skipped"}`;
   }
   if (type === "artifacts_ready") {
     return `<strong>Artifacts ready</strong> ${escapeHtml(JSON.stringify(event.summary || {}))}`;
@@ -203,52 +220,21 @@ function setLink(link, href) {
   }
 }
 
-function renderVisuals(summary) {
-  const steps = [
-    ["Topic", "User-scoped prompt"],
-    ["Skills", (summary.skill_trace || []).length ? `${summary.skill_trace.length} trace events` : "progressive context"],
-    ["Evidence KB", `${summary.paper_count || 0} papers`],
-    ["Grounding", `${summary.evidence_count || 0} evidence records`],
-    ["Verifier", summary.citation_status || "not_run"],
-    ["Exports", "Markdown + PDF"],
-  ];
-  els.pipeline.innerHTML = steps
-    .map(([label, value]) => `<div class="pipeline-step"><strong>${escapeHtml(label)}</strong><small>${escapeHtml(value)}</small></div>`)
-    .join("");
-
-  const years = (summary.year_counts || []).filter((row) => row.label !== "Unknown").slice(-16);
-  const maxYear = Math.max(1, ...years.map((row) => row.count || 0));
-  els.timelineBars.innerHTML = years
-    .map((row) => {
-      const height = Math.max(6, Math.round(((row.count || 0) / maxYear) * 92));
-      return `<div class="timeline-bar" title="${escapeHtml(row.label)}: ${row.count}"><span style="height:${height}px"></span><small>${escapeHtml(String(row.label).slice(-4))}</small></div>`;
-    })
-    .join("");
-
-  const sources = (summary.source_counts || []).slice(0, 8);
-  const maxSource = Math.max(1, ...sources.map((row) => row.count || 0));
-  els.sourceBars.innerHTML = sources
-    .map((row) => {
-      const width = Math.round(((row.count || 0) / maxSource) * 100);
-      return `<div class="source-row"><span title="${escapeHtml(row.label)}">${escapeHtml(row.label)}</span><div class="source-track"><div class="source-fill" style="width:${width}%"></div></div><strong>${row.count}</strong></div>`;
-    })
-    .join("");
-}
-
 function showEvidence(evidenceId) {
   const evidence = currentPayload?.summary?.cited_evidence || [];
   const item = evidence.find((row) => row.evidence_id === evidenceId);
   if (!item) {
-    els.evidenceFocus.innerHTML = `<p class="panel-label">Evidence focus</p><span class="evidence-tag">${escapeHtml(evidenceId)}</span><p class="muted">Evidence text is not in the current cited set.</p>`;
+    els.evidenceFocus.innerHTML = `<span class="evidence-tag">${escapeHtml(evidenceId)}</span><p class="muted">Evidence text is not in the current cited set.</p>`;
+    els.evidenceFocus.hidden = false;
     return;
   }
   els.evidenceFocus.innerHTML = `
-    <p class="panel-label">Evidence focus</p>
     <span class="evidence-tag">${escapeHtml(item.evidence_id)}</span>
     <h3>${escapeHtml(item.title || "Untitled")}</h3>
     <p class="muted">${escapeHtml([item.year, item.source].filter(Boolean).join(" · "))}</p>
     <p>${escapeHtml(item.text || "")}</p>
   `;
+  els.evidenceFocus.hidden = false;
 }
 
 function setTab(name) {
@@ -313,7 +299,8 @@ function renderMarkdown(markdown) {
       continue;
     }
     if (!line.trim()) {
-      flushAll();
+      flushParagraph();
+      flushTable();
       continue;
     }
     if (line.startsWith("|")) {
@@ -346,6 +333,7 @@ function renderMarkdown(markdown) {
       out.push(`<blockquote>${inline(line.replace(/^>\s?/, ""))}</blockquote>`);
       continue;
     }
+    flushList();
     paragraph.push(line.trim());
   }
   flushAll();
@@ -358,6 +346,12 @@ function inline(text) {
   safe = safe.replace(/`(.+?)`/g, "<code>$1</code>");
   safe = safe.replace(/\b(P\d{2,4}-E\d{2,3})\b/g, '<button type="button" class="evidence-chip" data-eid="$1">$1</button>');
   return safe;
+}
+
+function scrollToBottom() {
+  requestAnimationFrame(() => {
+    window.scrollTo({ top: document.body.scrollHeight, behavior: "smooth" });
+  });
 }
 
 function escapeHtml(value) {
