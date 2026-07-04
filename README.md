@@ -1,109 +1,117 @@
 # Literature Review Harness
 
-基于 Intern-S2-Preview API 和 Sciverse 文献检索的 **Agentic Harness**，LLM 自主决策文献检索、研读、写作，输出带真实引用的文献综述。
+基于 Intern-S2、Sciverse 和可选 MinerU 的 agentic 文献综述 Harness。核心仍是 LLM 驱动的 Agent Loop，不是固定流水线；新增 Evidence KB 层后，模型只能围绕稳定 evidence id 写作和引用。
 
 ## 核心设计
 
-区别于普通脚本，本 Harness 实现的是 **Agent Loop**（LLM 驱动的工具调用循环）：
-
 ```
 用户输入主题
-  → ContextBuilder 组装 system prompt + 工具 schema
-  → LLM 调用（Intern-S2-Preview，带 tools 参数）
-  → LLM 自主决定调用 search_literature / read_context
-  → 执行工具 → 结果回传 → LLM 再决策
-  → 循环直到 LLM 认为证据充分 → 输出综述
+  -> ContextBuilder 组装 system prompt + 工具 schema
+  -> LLM 调用 Intern-S2 tool calling
+  -> LLM 先调用 build_literature_kb
+  -> Sciverse semantic/meta 检索并生成 evidence records
+  -> MinerU 以快模式尝试解析可访问全文
+  -> LLM 通过 list_evidence/read_evidence/read_context 补证据
+  -> CitationVerifier 检查最终 Markdown 引用
+  -> 输出 survey.md + evidence_pack.json + check_report.json
 ```
 
-三阶段流程由 LLM **自主驱动**（非硬编码流水线）：文献检索 → 文献研读 → 综述写作。
+Evidence id 形如 `P001-E01`。最终综述中的实质性段落必须引用这些 id，例如 `[P001-E01]`，不能自由编造论文、作者、结论，也不能再使用旧的 `[doc_id, offset]` 作为最终引用格式。
 
 ## 快速开始
 
 ```bash
-# 1. 安装依赖
-pip install httpx python-dotenv
-
-# 2. 配置 API Key
+pip install -r requirements.txt
 cp .env.example .env
-# 编辑 .env，填入：
-#   INTERN_API_BASE=https://chat.intern-ai.org.cn/api/v1
-#   INTERN_API_KEY=sk-xxx
-#   SCIVERSE_API_TOKEN=sci_xxx
+```
 
-# 3. 运行
+编辑 `.env`：
+
+```bash
+INTERN_API_BASE=https://chat.intern-ai.org.cn/api/v1
+INTERN_API_KEY=sk-xxx
+SCIVERSE_API_TOKEN=sv-xxx
+
+# 可选。缺失时自动退化为 Sciverse-only。
+MINERU_API_TOKEN=xxx
+MINERU_ENABLED=true
+MINERU_TIMEOUT=600
+MINERU_BATCH_SIZE=1
+MINERU_FAST=true
+```
+
+运行原命令仍可用：
+
+```bash
 python main.py "World Models in deep reinforcement learning"
 ```
 
-输出：`output/survey.md`
+输出文件：
+
+- `output/survey.md`：最终 Markdown 综述
+- `output/evidence_pack.json`：论文、evidence、MinerU 状态审计包
+- `output/check_report.json`：引用校验报告
+
+## 工具列表
+
+| 工具 | 功能 |
+|------|------|
+| `build_literature_kb` | 构建 Sciverse evidence KB，并按配置尝试 MinerU |
+| `list_evidence` | 列出当前 KB 中的 evidence ids |
+| `read_evidence` | 按 evidence id 读取完整证据文本 |
+| `search_literature` | 追加 Sciverse semantic 检索结果为 evidence |
+| `read_context` | 读取 Sciverse 上下文并包装成 evidence |
+
+## MinerU 策略
+
+MinerU 是增强源，不是硬依赖。默认配置面向综述快模式：
+
+- `pipeline` 模型
+- 关闭 table/formula
+- 只取 `1-12` 页
+- `MINERU_BATCH_SIZE=1`，即一篇论文一个 batch
+- `MINERU_TIMEOUT=600`，10 分钟内没完成就标记 `skipped`
+- 超时 reason 为 `MinerU timeout; using Sciverse evidence`
+
+只要 Sciverse evidence 已经存在，MinerU 失败、缺 key、超时都不会阻塞综述生成。
+
+## 防幻觉机制
+
+- 所有工具返回稳定 `evidence_id`
+- system prompt 要求最终正文只引用 evidence id
+- `CitationVerifier` 会拒绝未知 evidence id
+- 长实质性段落没有 evidence id 时会触发继续修订
+- `evidence_pack.json` 保留所有可审计证据和 MinerU 状态
 
 ## 项目结构
 
 ```
 literature-review-harness/
-├── main.py                        # 入口：组装组件 + 运行 Agent Loop
-├── .env.example                   # API Key 配置模板
-├── requirements.txt               # httpx, python-dotenv
-└── src/
-    ├── agent/
-    │   ├── loop.py                # AgentLoop：LLM ↔ tools 循环核心
-    │   └── context.py             # ContextBuilder：messages 组装 + hook 预留
-    ├── tools/
-    │   ├── registry.py            # ToolRegistry：工具注册/执行/schema 导出
-    │   └── sciverse_tools.py      # search_literature + read_context
-    ├── llm/
-    │   └── client.py              # LLMClient：OpenAI 兼容 tool-calling
-    └── utils/
-        └── config.py              # Config：环境变量加载
+├── main.py
+├── src/
+│   ├── agent/
+│   │   ├── context.py
+│   │   └── loop.py
+│   ├── llm/
+│   │   └── client.py
+│   ├── state/
+│   │   └── kb.py
+│   ├── tools/
+│   │   ├── literature_kb.py
+│   │   ├── mineru.py
+│   │   ├── registry.py
+│   │   └── sciverse_tools.py
+│   ├── utils/
+│   │   └── config.py
+│   └── validation/
+│       └── citations.py
+└── tests/
+    └── test_evidence_kb.py
 ```
 
-## 组件说明
+## 测试
 
-### AgentLoop（`src/agent/loop.py`）
-
-核心循环逻辑：
-- LLM 返回 `tool_calls` → 逐个执行 → 结果回传 → 继续循环
-- LLM 返回纯文本（无 tool_calls） → 检查 stop_conditions → 输出最终结果
-- `max_iters=15` 硬限制防止无限循环
-
-### ToolRegistry（`src/tools/registry.py`）
-
-- `Tool` Protocol：`name` / `description` / `parameters`(JSON Schema) / `execute()`
-- `register(tool)` 注册工具
-- `export_schemas()` 导出为 OpenAI function-calling 格式
-- `add_hook()` 注册执行后钩子
-
-### ContextBuilder（`src/agent/context.py`）
-
-- 组装 system prompt（含综述写作规范 + 防幻觉要求）
-- 管理 messages 列表
-- 预留 `pre_llm_hooks`（Skills/Memory 注入点）
-- 预留 `post_tool_hooks`（工具结果截断/转换点）
-
-### 工具列表
-
-| 工具 | 功能 | API |
-|------|------|-----|
-| `search_literature` | 语义检索论文 | Sciverse `/agentic-search` |
-| `read_context` | 读取论文全文上下文 | Sciverse `/content` |
-
-## 扩展预留
-
-所有扩展点已预留 hook 接口，新增功能无需修改核心循环：
-
-| 要加的功能 | 接入方式 |
-|-----------|---------|
-| Skill 系统 | `ContextBuilder.add_pre_llm_hook()` 注入 skill prompt |
-| Memory 系统 | `ContextBuilder.add_pre_llm_hook()` 注入记忆摘要 |
-| 上下文截断 | `ContextBuilder.add_post_tool_hook()` 截断过长工具结果 |
-| 幻觉检测 | `AgentLoop.add_post_llm_hook()` 检查每轮 LLM 输出 |
-| 引用验证 | `AgentLoop.add_stop_condition()` 未通过审查则继续循环 |
-| 新工具 | `ToolRegistry.register(MyNewTool)` |
-
-## 防幻觉机制
-
-当前通过 system prompt 强制要求：
-- 每个论点标注来源 `[doc_id, offset]`
-- 严禁编造未在检索结果中出现的论文信息
-- 证据不足时明确说明而非编造
-
-后续计划：添加 `TextCitationVerifier` 进行文本级引用扫描验证。
+```bash
+python -m unittest discover -s tests
+python -m py_compile main.py $(find src -name '*.py')
+```
