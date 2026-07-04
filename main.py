@@ -34,6 +34,7 @@ from src.tools.registry import ToolRegistry
 from src.utils.config import Config
 from src.utils.runs import create_run_paths, sync_latest_compat_outputs, write_latest_pointer
 from src.validation.citations import CitationVerifier
+from src.validation.multi_agent import MultiAgentReviewer
 from src.skill_system.injection import SkillContextInjector
 from src.skill_system.manager import SkillManager
 from src.skill_system.router import SkillRouter
@@ -107,6 +108,8 @@ async def main():
         register_skill_tools(registry, skill_manager, skill_router, skill_trace)
 
     verifier = CitationVerifier(kb)
+    ma_enabled = os.getenv("MULTI_AGENT_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
+    reviewer = MultiAgentReviewer(llm, kb, topic=topic, enabled=ma_enabled)
 
     loop = AgentLoop(
         llm=llm,
@@ -115,7 +118,8 @@ async def main():
         max_iterations=config.max_iterations,
         verbose=True,
     )
-    loop.add_stop_condition(verifier)
+    loop.add_stop_condition(reviewer)   # Multi-agent quality review (3 parallel LLM calls)
+    loop.add_stop_condition(verifier)   # Fast mechanical citation check
 
     user_message = (
         f"Please generate a comprehensive academic literature survey on the following topic: "

@@ -1,5 +1,5 @@
+import asyncio
 import json
-import sys
 from typing import Any, Callable
 
 from ..llm.client import LLMClient
@@ -8,12 +8,11 @@ from .context import ContextBuilder
 
 
 class AgentLoop:
-    """Core agent loop: context → LLM → tool calls → execute → loop → final output.
+    """Core agent loop: context → LLM → tool calls → execute (parallel) → loop → final output.
 
     Extension points:
     - add_post_llm_hook(hook): hook(message) -> message (for hallucination check, etc.)
-    - add_stop_condition(cond): cond(messages) -> bool (for quality-based stopping)
-    - sub_loops: spawn another AgentLoop for parallel sub-agent review
+    - add_stop_condition(cond): cond(messages) -> bool | awaitable (for quality-based stopping)
     """
 
     def __init__(
@@ -86,12 +85,18 @@ class AgentLoop:
                 tool_calls = self.llm.extract_tool_calls(response)
                 self._log(f"LLM requested {len(tool_calls)} tool call(s)")
 
-                for idx, tc in enumerate(tool_calls, 1):
+                if len(tool_calls) > 1:
+                    async def _exec(tc):
+                        return tc["id"], tc["name"], tc["arguments"], await self.registry.execute(tc["name"], tc["arguments"])
+                    results = await asyncio.gather(*[_exec(tc) for tc in tool_calls])
+                    for idx, (tc_id, name, args, result) in enumerate(results, 1):
+                        self._log_tool_call(name, args, result, idx, len(results))
+                        messages.append(self.context.build_tool_result_message(tc_id, result))
+                else:
+                    tc = tool_calls[0]
                     result = await self.registry.execute(tc["name"], tc["arguments"])
-                    self._log_tool_call(tc["name"], tc["arguments"], result, idx, len(tool_calls))
-                    messages.append(
-                        self.context.build_tool_result_message(tc["id"], result)
-                    )
+                    self._log_tool_call(tc["name"], tc["arguments"], result, 1, 1)
+                    messages.append(self.context.build_tool_result_message(tc["id"], result))
                 continue
 
             # No tool calls - LLM is producing final content
@@ -99,10 +104,13 @@ class AgentLoop:
                 content = response.get("content", "")
                 self._log(f"LLM final response ({len(content)} chars)")
 
-                # Check stop conditions
+                # Check stop conditions (supports sync and async)
                 all_stop = True
                 for cond in self._stop_conditions:
-                    if not cond(messages):
+                    result = cond(messages)
+                    if asyncio.iscoroutine(result):
+                        result = await result
+                    if not result:
                         all_stop = False
                         self._log(f"Stop condition not met, continuing...")
                         break
