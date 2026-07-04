@@ -45,7 +45,7 @@ class CitationVerifier:
             if self._should_skip_paragraph(paragraph):
                 continue
             if not EVIDENCE_ID_RE.search(paragraph):
-                errors.append(
+                warnings.append(
                     {
                         "issue": "missing_evidence_citation",
                         "paragraph": index,

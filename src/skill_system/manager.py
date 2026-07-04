@@ -8,7 +8,7 @@ from typing import Any
 
 
 PHASE_ROLES: dict[str, list[str]] = {
-    "literature_review": ["research_framing", "survey_writing", "citation_grounding"],
+    "literature_review": ["research_framing", "survey_writing", "citation_grounding", "self_review", "academic_polishing"],
     "retrieve": ["academic_search"],
     "write": ["research_framing", "survey_writing"],
     "verify": ["citation_grounding"],

@@ -136,7 +136,7 @@ class CitationVerifierTest(unittest.TestCase):
         self.assertEqual(report.status, "fail")
         self.assertEqual(report.errors[0]["issue"], "unknown_evidence_id")
 
-    def test_accepts_known_evidence_ids_and_flags_missing_paragraph_citations(self) -> None:
+    def test_accepts_known_evidence_ids_and_warns_on_missing_paragraph_citations(self) -> None:
         kb = LiteratureKB()
         paper = kb.upsert_paper(title="World Models")
         evidence = kb.add_evidence(paper, text=" ".join(["world"] * 40), source="sciverse_semantic")
@@ -148,15 +148,15 @@ class CitationVerifierTest(unittest.TestCase):
             f"World-model surveys can discuss latent dynamics when the statement is backed by evidence {evidence.evidence_id}; "
             "this paragraph is deliberately long enough to require citation checking."
         )
-        failing = verifier.validate_text(
+        warned = verifier.validate_text(
             "# Survey\n\n"
-            "This is a long substantive paragraph without any evidence identifier, so the verifier should reject it "
-            "instead of allowing unsupported survey prose into the final answer."
+            "This is a long substantive paragraph without any evidence identifier, so the verifier should surface it "
+            "as a warning for downstream review instead of treating it as an unknown citation."
         )
 
         self.assertEqual(passing.status, "pass")
-        self.assertEqual(failing.status, "fail")
-        self.assertEqual(failing.errors[0]["issue"], "missing_evidence_citation")
+        self.assertEqual(warned.status, "pass")
+        self.assertEqual(warned.warnings[0]["issue"], "missing_evidence_citation")
 
 
 if __name__ == "__main__":

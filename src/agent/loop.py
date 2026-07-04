@@ -1,3 +1,4 @@
+import asyncio
 import json
 import sys
 from datetime import UTC, datetime
@@ -9,12 +10,11 @@ from .context import ContextBuilder
 
 
 class AgentLoop:
-    """Core agent loop: context → LLM → tool calls → execute → loop → final output.
+    """Core agent loop: context → LLM → tool calls → execute (parallel) → loop → final output.
 
     Extension points:
     - add_post_llm_hook(hook): hook(message) -> message (for hallucination check, etc.)
-    - add_stop_condition(cond): cond(messages) -> bool (for quality-based stopping)
-    - sub_loops: spawn another AgentLoop for parallel sub-agent review
+    - add_stop_condition(cond): cond(messages) -> bool | awaitable (for quality-based stopping)
     """
 
     def __init__(
@@ -134,20 +134,41 @@ class AgentLoop:
                         name=tc["name"],
                         arguments=tc["arguments"],
                     )
+                async def execute_tool_call(index: int, tc: dict[str, Any]) -> dict[str, Any]:
                     result = await self.registry.execute(tc["name"], tc["arguments"])
-                    self._log_tool_call(tc["name"], tc["arguments"], result, idx, len(tool_calls))
                     self._emit(
                         "tool_call_finished",
                         iteration=iteration,
-                        index=idx,
+                        index=index,
                         total=len(tool_calls),
                         name=tc["name"],
                         result_preview=result[:800],
                         result_chars=len(result),
                     )
-                    messages.append(
-                        self.context.build_tool_result_message(tc["id"], result)
+                    return {
+                        "tool_call_id": tc["id"],
+                        "name": tc["name"],
+                        "arguments": tc["arguments"],
+                        "result": result,
+                        "index": index,
+                    }
+
+                if len(tool_calls) > 1:
+                    results = await asyncio.gather(
+                        *(execute_tool_call(idx, tc) for idx, tc in enumerate(tool_calls, 1))
                     )
+                else:
+                    results = [await execute_tool_call(1, tool_calls[0])]
+
+                for item in results:
+                    self._log_tool_call(
+                        item["name"],
+                        item["arguments"],
+                        item["result"],
+                        item["index"],
+                        len(tool_calls),
+                    )
+                    messages.append(self.context.build_tool_result_message(item["tool_call_id"], item["result"]))
                 continue
 
             # No tool calls - LLM is producing final content
@@ -161,10 +182,12 @@ class AgentLoop:
                     content_chars=len(content),
                 )
 
-                # Check stop conditions
+                # Check stop conditions (supports sync and async)
                 all_stop = True
                 for cond in self._stop_conditions:
                     passed = cond(messages)
+                    if asyncio.iscoroutine(passed):
+                        passed = await passed
                     report = cond.report_dict() if hasattr(cond, "report_dict") else None
                     self._emit(
                         "stop_condition",

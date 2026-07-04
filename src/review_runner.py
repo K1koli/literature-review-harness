@@ -29,6 +29,7 @@ from src.tools.registry import ToolRegistry
 from src.utils.config import Config
 from src.utils.runs import create_run_paths, sync_latest_compat_outputs, write_latest_pointer
 from src.validation.citations import CitationVerifier
+from src.validation.multi_agent import MultiAgentReviewer
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -147,7 +148,10 @@ async def run_literature_review(
     else:
         _emit(event_sink, "skill_system_disabled")
 
+    ma_enabled = os.getenv("MULTI_AGENT_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
     verifier = CitationVerifier(kb)
+    reviewer = MultiAgentReviewer(llm, kb, topic=topic, enabled=ma_enabled)
+    _emit(event_sink, "multi_agent_review_configured", enabled=ma_enabled)
     loop = AgentLoop(
         llm=llm,
         registry=registry,
@@ -156,6 +160,7 @@ async def run_literature_review(
         verbose=verbose,
         event_sink=event_sink,
     )
+    loop.add_stop_condition(reviewer)
     loop.add_stop_condition(verifier)
 
     _emit(event_sink, "components_ready", tools=registry.list_names())
