@@ -69,6 +69,13 @@ python3 -m src.demo.server --host 127.0.0.1 --port 8000
 
 打开 `http://127.0.0.1:8000` 后输入综述主题并点击 `生成`。页面会调用真实 harness，通过 SSE 展示 AgentLoop、工具调用、Skill 加载、survey context、审查、引用校验和导出事件；完成后运行过程会自动收起，并展示渲染后的 Markdown、PDF 预览和下载链接。
 
+Demo 每次运行会写入独立目录：
+
+- `output/demo_runs/<run_id>/`：前端下载和预览使用的兼容目录
+- `output/demo_runs/<run_id>/runs/YYYYMMDD-HHMM-topic/`：真实 harness run 包
+
+`survey.md/html/tex`、`evidence_pack.json`、`check_report.json`、`skill_trace.json`、`figure_plan.json` 会同步到 demo run 根目录，`figures/` 也会同步到 demo run 根目录，保证前端图片预览可以直接通过 `/api/reviews/<run_id>/asset/figures/...` 访问。
+
 输出文件：
 
 - `output/runs/YYYYMMDD-HHMM-topic/survey.md`：最终 Markdown 综述
@@ -114,19 +121,22 @@ enabled = true
 api_key_env = "OPENAI_API_KEY"
 base_url = "https://api.openai.com/v1"
 endpoint_path = "/images/generations"
-model = "gpt-image-1"
+models = ["gpt-image-2", "gpt-image-1", "dall-e-3"]
 size = "1536x1024"
 quality = "low"
-count = 1
+count = 3
 timeout_seconds = 180
 ```
 
 设计原则：
 
 - prompt 来自最终 `survey.md` 和 Evidence KB 的论文元数据
-- 图片只做概念图、时间线、方法图等表达层内容
+- 图片只做概念图、时间线、方法图、应用图等表达层内容
 - 不要求图片写精确论文题名、作者、DOI 或 citation id
 - factual claims 仍然只由正文中的 evidence id 支撑
+- 图片模型按配置顺序 fallback；如果某个模型不可用，会继续尝试下一个模型
+- `dall-e-3` fallback 会自动切换到其支持的尺寸
+- 如果所有图片 API 都失败，会退回本地 SVG，保证 demo 不因图片接口失败中断
 
 ## MinerU 策略
 
@@ -206,3 +216,16 @@ literature-review-harness/
 python3 -m unittest discover -s tests
 python3 -m py_compile main.py $(find src -name '*.py')
 ```
+
+当前完整测试集应为 52 个 unittest 通过。
+
+## Demo 检查清单
+
+录制或答辩前建议确认：
+
+1. `python3 -m src.demo.server --host 127.0.0.1 --port 8000` 能启动。
+2. 页面事件中出现 `skill_system_enabled`、`components_ready`、`tool_call_started`、`image_generation_finished`、`artifacts_ready`。
+3. 结果页 `check` 为 `pass`，`cited` 大于 0。
+4. Markdown、HTML、TeX、PDF、Evidence、check report、skill trace、figure plan 下载链接可点击。
+5. 至少一张图片能在 HTML/PDF 预览中显示；若图片 API 被第三方网关拒绝，SVG fallback 仍应显示。
+6. 如果页面正文显示 `Agent loop reached maximum iterations without completing the task.`，说明该次 run 没有产出有效综述，应重新运行或提高 `MAX_ITERATIONS`，不要把这次 run 作为最终 demo。
