@@ -217,7 +217,8 @@ Show the section's organizing logic with simple geometric shapes, clusters, and 
 
 Constraints:
 - Use at most six short generic labels.
-- Do not include people, faces, vehicles, medical imagery, brands, logos, screenshots, code, equations, citations, author names, paper titles, or numeric claims.
+- Use only abstract shapes, arrows, clusters, and simple academic icons.
+- Keep factual claims in the article text; the image should show structure only.
 - Keep the image calm, readable, and suitable for a conference paper.
 - Leave generous whitespace and avoid dense text.
 """.strip()

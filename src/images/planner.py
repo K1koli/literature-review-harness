@@ -329,9 +329,10 @@ Visual direction:
 Logical requirements:
 {logic}
 
-Safety and citation constraints:
-- Do not include people, faces, vehicles, medical scenes, brands, logos, screenshots, source code, equations, citation ids, author names, paper titles, DOI strings, or exact benchmark numbers.
-- Do not claim exact facts inside the image; factual support remains in the survey text and caption.
+Content constraints:
+- Use only abstract academic infographic elements: blocks, arrows, branches, clusters, icons, timelines, and labels.
+- Keep all factual support in the survey text and caption; the image should communicate structure, not exact claims.
+- Avoid real-world scenes, identifiable entities, brands, screenshots, source code, equations, citation strings, author names, paper titles, DOI strings, and benchmark numbers.
 - The result must look like a figure from a serious ML/AI survey paper, not a marketing poster.
 
 Figure-skill guidance:
