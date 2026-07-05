@@ -85,10 +85,11 @@ class OpenAIImageGenerator:
 
     async def _generate_with_model(self, spec: FigurePlan, output_dir: Path, model: str) -> GeneratedImage:
         image_path = output_dir / spec.filename
+        size = _size_for_model(model, self.size)
         payload: dict[str, Any] = {
             "model": model,
             "prompt": spec.prompt,
-            "size": self.size,
+            "size": size,
             "n": 1,
         }
         if self.quality:
@@ -129,7 +130,7 @@ class OpenAIImageGenerator:
             prompt=spec.prompt,
             path=str(image_path),
             model=model,
-            size=self.size,
+            size=size,
             quality=self.quality,
             render_mode=getattr(spec, "render_mode", "image"),
             figure_type=getattr(spec, "figure_type", ""),
@@ -162,3 +163,9 @@ def _dedupe(values: list[str]) -> list[str]:
         if value and value not in result:
             result.append(value)
     return result or ["gpt-image-1"]
+
+
+def _size_for_model(model: str, requested_size: str) -> str:
+    if model == "dall-e-3" and requested_size not in {"1024x1024", "1024x1792", "1792x1024"}:
+        return "1024x1024"
+    return requested_size

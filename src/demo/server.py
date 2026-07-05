@@ -285,6 +285,7 @@ def _run_live_review(state: RunState) -> None:
 
 
 def _finalize_artifacts(state: RunState) -> None:
+    _sync_latest_run_figures(state.output_dir)
     markdown = (state.output_dir / "survey.md").read_text(encoding="utf-8")
     evidence_pack = json.loads((state.output_dir / "evidence_pack.json").read_text(encoding="utf-8"))
     check_report = json.loads((state.output_dir / "check_report.json").read_text(encoding="utf-8"))
@@ -316,6 +317,23 @@ def _finalize_artifacts(state: RunState) -> None:
             },
         }
     )
+
+
+def _sync_latest_run_figures(output_dir: Path) -> None:
+    latest_path = output_dir / "latest_run.json"
+    if not latest_path.exists():
+        return
+    try:
+        latest = json.loads(latest_path.read_text(encoding="utf-8"))
+    except json.JSONDecodeError:
+        return
+    source = Path(str(latest.get("figures_dir") or ""))
+    if not source.exists() or not source.is_dir():
+        return
+    target = output_dir / "figures"
+    if target.exists():
+        shutil.rmtree(target)
+    shutil.copytree(source, target)
 
 
 def _clean_topic(value: Any) -> str:

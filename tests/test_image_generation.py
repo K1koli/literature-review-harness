@@ -163,6 +163,15 @@ class ImageGenerationTest(unittest.TestCase):
 
         self.assertEqual(generator.models, ["first-model", "second-model"])
 
+    def test_generator_uses_supported_size_for_dalle3_fallback(self) -> None:
+        generator = OpenAIImageGenerator(api_key="test-key", models=["dall-e-3"], size="1536x1024")
+
+        self.assertEqual(generator.models, ["dall-e-3"])
+        from src.images.generator import _size_for_model
+
+        self.assertEqual(_size_for_model("dall-e-3", generator.size), "1024x1024")
+        self.assertEqual(_size_for_model("gpt-image-2", generator.size), "1536x1024")
+
     def test_pipeline_writes_manifest_with_fake_generator(self) -> None:
         class FakeGenerator:
             def __init__(self, **kwargs):
