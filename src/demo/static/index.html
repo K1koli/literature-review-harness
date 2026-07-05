@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Literature Review Harness Demo</title>
+    <link rel="stylesheet" href="/static/styles.css" />
+  </head>
+  <body>
+    <div class="app-shell">
+      <header class="chat-header">
+        <div class="brand">
+          <span class="brand-mark">LR</span>
+          <div>
+            <p>Literature Review Harness</p>
+            <h1>学术综述生成</h1>
+          </div>
+        </div>
+        <div class="status-pill" aria-live="polite">
+          <span class="status-dot idle" id="statusDot"></span>
+          <span id="statusText">Idle</span>
+        </div>
+      </header>
+
+      <main class="chat-main">
+        <section class="messages" id="messageList">
+          <div class="message assistant-message" id="welcomeMessage">
+            <div class="avatar">H</div>
+            <div class="bubble compact-bubble">
+              <strong>准备生成综述</strong>
+            </div>
+          </div>
+
+          <div class="message user-message" id="userMessage" hidden>
+            <div class="bubble" id="userText"></div>
+          </div>
+
+          <div class="message assistant-message" id="assistantMessage" hidden>
+            <div class="avatar">H</div>
+            <div class="bubble answer-bubble">
+              <details class="thinking-panel" id="tracePanel" open>
+                <summary>
+                  <span>运行过程</span>
+                  <small id="traceSummary">Waiting</small>
+                </summary>
+                <ol class="trace-log" id="traceLog"></ol>
+              </details>
+
+              <section class="answer-panel" id="answerPanel" hidden>
+                <div class="answer-header">
+                  <div class="metric-row" aria-label="review metrics">
+                    <span><strong id="paperCount">0</strong> papers</span>
+                    <span><strong id="evidenceCount">0</strong> evidence</span>
+                    <span><strong id="citedCount">0</strong> cited</span>
+                    <span><strong id="citationStatus">-</strong> check</span>
+                  </div>
+                  <div class="download-row">
+                    <a class="download-link disabled" id="downloadMd" href="#" download>MD</a>
+                    <a class="download-link disabled" id="downloadHtml" href="#" download>HTML</a>
+                    <a class="download-link disabled" id="downloadTex" href="#" download>TeX</a>
+                    <a class="download-link disabled" id="downloadPdf" href="#" download>PDF</a>
+                    <a class="download-link disabled" id="downloadEvidence" href="#" download>Evidence</a>
+                  </div>
+                </div>
+
+                <div class="article-tabs" role="tablist">
+                  <button class="tab-btn active" data-tab="markdown" type="button">文章</button>
+                  <button class="tab-btn" data-tab="pdf" type="button">PDF</button>
+                </div>
+
+                <article class="article markdown-body" id="markdownView"></article>
+                <div class="pdf-view" id="pdfView" hidden>
+                  <object id="pdfObject" type="application/pdf"></object>
+                </div>
+
+                <section class="evidence-focus" id="evidenceFocus" hidden></section>
+              </section>
+            </div>
+          </div>
+        </section>
+      </main>
+
+      <form id="reviewForm" class="composer">
+        <div class="composer-inner">
+          <textarea id="topicInput" name="topic" rows="1" placeholder="输入综述主题">World Models（世界模型）</textarea>
+          <div class="composer-actions">
+            <button class="secondary-btn" id="sampleButton" type="button">样例</button>
+            <button class="primary-btn" id="runButton" type="submit">生成</button>
+          </div>
+        </div>
+      </form>
+    </div>
+    <script src="/static/app.js"></script>
+  </body>
+</html>

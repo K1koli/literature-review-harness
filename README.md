@@ -56,8 +56,18 @@ OPENAI_IMAGE_QUALITY=low
 运行原命令仍可用：
 
 ```bash
-python main.py "World Models in deep reinforcement learning"
+python3 main.py "World Models in deep reinforcement learning"
 ```
+
+## 前端 Demo
+
+启动一个简洁的对话式 demo：
+
+```bash
+python3 -m src.demo.server --host 127.0.0.1 --port 8000
+```
+
+打开 `http://127.0.0.1:8000` 后输入综述主题。`生成` 会调用真实 harness；`样例` 会回放本地 `output/` 下已有的 World Models 运行包，适合无 API key 时展示。页面会通过 SSE 展示 AgentLoop、工具调用、Skill 加载、survey context、审查、引用校验和导出事件；完成后运行过程会自动收起，并展示渲染后的 Markdown、PDF 预览和下载链接。
 
 输出文件：
 
@@ -148,6 +158,12 @@ literature-review-harness/
 │   ├── agent/
 │   │   ├── context.py
 │   │   └── loop.py
+│   ├── demo/
+│   │   ├── server.py
+│   │   ├── artifacts.py
+│   │   ├── pdf.py
+│   │   └── static/
+│   ├── review_runner.py
 │   ├── llm/
 │   │   └── client.py
 │   ├── images/
@@ -175,6 +191,10 @@ literature-review-harness/
 │   │   └── multi_agent.py
 └── tests/
     ├── test_evidence_kb.py
+    ├── test_agent_loop.py
+    ├── test_agent_loop_events.py
+    ├── test_demo_artifacts.py
+    ├── test_exporters.py
     ├── test_skill_system.py
     ├── test_image_generation.py
     └── test_multi_agent_review.py
@@ -183,6 +203,6 @@ literature-review-harness/
 ## 测试
 
 ```bash
-python -m unittest discover -s tests
-python -m py_compile main.py $(find src -name '*.py')
+python3 -m unittest discover -s tests
+python3 -m py_compile main.py $(find src -name '*.py')
 ```
