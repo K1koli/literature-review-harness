@@ -175,6 +175,7 @@ async def run_literature_review(
         registry=registry,
         context=context,
         max_iterations=config.max_iterations,
+        max_revision_rounds=int(os.getenv("MAX_REVISION_ROUNDS", "3")),
         verbose=verbose,
         event_sink=event_sink,
     )

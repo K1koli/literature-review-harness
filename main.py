@@ -121,6 +121,7 @@ async def main():
         registry=registry,
         context=context,
         max_iterations=config.max_iterations,
+        max_revision_rounds=int(os.getenv("MAX_REVISION_ROUNDS", "3")),
         verbose=True,
     )
     loop.add_stop_condition(verifier)
