@@ -78,7 +78,7 @@ class Config:
     mineru_timeout: int = 600
     mineru_batch_size: int = 1
     mineru_fast: bool = True
-    max_iterations: int = 20
+    max_iterations: int = 50
     model: str = "intern-s2-preview"
 
     @classmethod
@@ -121,7 +121,7 @@ class Config:
             mineru_timeout=int(os.getenv("MINERU_TIMEOUT", str(runtime_cfg.get("timeout_seconds", "600")))),
             mineru_batch_size=int(os.getenv("MINERU_BATCH_SIZE", "1")),
             mineru_fast=os.getenv("MINERU_FAST", "true").lower() in {"1", "true", "yes"},
-            max_iterations=int(os.getenv("MAX_ITERATIONS", "20")),
+            max_iterations=int(os.getenv("MAX_ITERATIONS", "50")),
             model=os.getenv("MODEL", _cfg(file_cfg, "llm", "model", "intern-s2-preview")),
         )
 

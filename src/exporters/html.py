@@ -4,7 +4,7 @@ import html
 import re
 from pathlib import Path
 
-from ..validation.citations import EVIDENCE_ID_RE
+from ..validation.citations import PAPER_ID_RE
 
 
 def export_html(markdown_path: Path, output_path: Path, *, title: str = "Literature Survey") -> None:
@@ -91,13 +91,13 @@ def _markdown_to_html(markdown: str) -> str:
 def _inline(text: str) -> str:
     escaped = html.escape(text)
     escaped = re.sub(r"\*\*(.+?)\*\*", r"<strong>\1</strong>", escaped)
-    escaped = EVIDENCE_ID_RE.sub(lambda m: f'<code class="evidence-id">{m.group(0)}</code>', escaped)
+    escaped = PAPER_ID_RE.sub(lambda m: f'<code class="evidence-id">{m.group(0)}</code>', escaped)
     return escaped
 
 
 def _inline_raw_html(text: str) -> str:
     text = re.sub(r"<strong>(.*?)</strong>", lambda m: f"<strong>{html.escape(m.group(1))}</strong>", text)
-    return EVIDENCE_ID_RE.sub(lambda m: f'<code class="evidence-id">{m.group(0)}</code>', text)
+    return PAPER_ID_RE.sub(lambda m: f'<code class="evidence-id">{m.group(0)}</code>', text)
 
 
 def _page(title: str, body: str) -> str:

@@ -160,6 +160,9 @@ class LiteratureKB:
     def evidence_ids(self) -> set[str]:
         return {item.evidence_id for item in self.evidence}
 
+    def paper_ids(self) -> set[str]:
+        return {paper.paper_id for paper in self.papers}
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "papers": [asdict(paper) for paper in self.papers],

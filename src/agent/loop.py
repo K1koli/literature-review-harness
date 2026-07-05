@@ -124,7 +124,7 @@ class AgentLoop:
                     # Ask LLM to continue improving.
                     messages.append({
                         "role": "user",
-                        "content": "Please continue improving the survey based on the review feedback above."
+                        "content": "Fix the specific issues flagged in the review above. Focus on exactly what the reviewers pointed out."
                     })
                     continue
 

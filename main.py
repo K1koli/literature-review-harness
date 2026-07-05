@@ -80,6 +80,7 @@ async def main():
     registry.register(ReadContextTool(config.sciverse_api_token, kb))
 
     context = ContextBuilder()
+    context.add_post_tool_hook(lambda r: (r[:2000] + "\n...(truncated)") if len(r) > 2200 else r)
     project_root = Path(__file__).resolve().parent
     skills_enabled = os.getenv("SKILLS_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
     skill_trace = None
@@ -109,7 +110,13 @@ async def main():
 
     verifier = CitationVerifier(kb)
     ma_enabled = os.getenv("MULTI_AGENT_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
-    reviewer = MultiAgentReviewer(llm, kb, topic=topic, enabled=ma_enabled)
+    # Use a stronger model for review (default: claude-opus-4-8 via third-party API)
+    review_llm = LLMClient(
+        api_base=os.getenv("REVIEW_LLM_BASE_URL", os.getenv("OPENAI_IMAGE_BASE_URL", "https://api.ai-gaochao.cn/v1")),
+        api_key=os.getenv("REVIEW_LLM_API_KEY", os.getenv("OPENAI_API_KEY", "")),
+        model=os.getenv("REVIEW_LLM_MODEL", "claude-opus-4-8"),
+    )
+    reviewer = MultiAgentReviewer(review_llm, kb, topic=topic, enabled=ma_enabled)
 
     loop = AgentLoop(
         llm=llm,
@@ -127,7 +134,7 @@ async def main():
         "Steps:\n"
         "1. First call build_literature_kb with a broad query for the topic.\n"
         "2. Use list_evidence/read_evidence and optional follow-up search_literature/read_context calls.\n"
-        "3. Write a structured academic survey whose substantive paragraphs cite evidence ids like [P001-E01].\n"
+        "3. Write a structured academic survey with numeric citations [1],[2] and a References section where each entry includes paper_id: Pnnn from the KB.\n"
         "Output in well-formatted Markdown."
     )
 
@@ -135,6 +142,7 @@ async def main():
         result = await loop.run(user_message)
     finally:
         await llm.close()
+        await review_llm.close()
         if skill_injector is not None:
             skill_injector.unload()
         if skill_trace is not None:
@@ -146,8 +154,11 @@ async def main():
     survey_path = run_paths.survey_md
     evidence_path = run_paths.evidence_pack
     check_path = run_paths.check_report
+    # Strip paper_id: from final output for clean academic formatting
+    import re
+    clean_result = re.sub(r",?\s*paper_id:\s*P\d+", "", result)
     with open(survey_path, "w", encoding="utf-8") as f:
-        f.write(result)
+        f.write(clean_result)
     with open(evidence_path, "w", encoding="utf-8") as f:
         f.write(kb.to_json())
     with open(check_path, "w", encoding="utf-8") as f:

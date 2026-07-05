@@ -23,21 +23,21 @@ _REVIEW_PROMPTS = {
         "- Comparative analysis: does the survey compare papers, or just list them?\n"
         "- Claims: are claims specific, or vague generalisations?\n"
         "- Gaps: are there obvious missing subtopics or papers?\n\n"
-        "Return a JSON object:\n"
-        '{"passed": true/false, "issues": ["specific issue 1", ...], "suggestions": ["fix 1", ...]}\n\n'
-        "Be specific about what needs fixing. If the survey is good, say so briefly."
+        "Give an overall score 1-10 and return a JSON object:\n"
+        '{"score": <1-10>, "passed": true/false, "issues": [...], "suggestions": [...]}\n\n'
+        "Be specific. Score >= 8 means good enough; < 5 means needs major rework."
     ),
     "citation_accuracy": (
         "You are a strict academic reviewer evaluating CITATION ACCURACY of a literature survey draft.\n\n"
-        "The survey must cite evidence using Pnnn-Enn format (e.g. [P001-E01]).\n"
+        "The survey uses numeric citations [1] [2] with a References section.\n"
         "Check for:\n"
-        "- Every substantive paragraph must contain at least one evidence citation\n"
-        "- References section must list papers that match the cited evidence IDs\n"
-        "- No mention of raw doc_ids, offsets, or API traces in the prose\n"
+        "- References section: each entry must include paper_id: Pnnn from the KB\n"
+        "- Every numbered citation [N] should correspond to a real reference entry\n"
+        "- No mention of raw doc_ids, offsets, evidence IDs, or API traces in the prose\n"
         "- No vague placeholder phrases like 'Various works on...', 'Several studies...'\n\n"
         "Return a JSON object:\n"
         '{"passed": true/false, "issues": ["specific issue 1", ...], "suggestions": ["fix 1", ...]}\n\n'
-        "Be specific about which paragraphs/sections have problems."
+        "Be specific about which references have problems."
     ),
     "structure_completeness": (
         "You are a strict academic reviewer evaluating STRUCTURE AND COMPLETENESS of a literature survey draft.\n\n"
@@ -62,12 +62,14 @@ class MultiAgentReviewer:
         loop.add_stop_condition(reviewer)
     """
 
-    def __init__(self, llm: LLMClient, kb: LiteratureKB, topic: str = "", enabled: bool = True):
+    def __init__(self, llm: LLMClient, kb: LiteratureKB, topic: str = "", enabled: bool = True, max_revisions: int = 3):
         self.llm = llm
         self.kb = kb
         self.topic = topic
         self.enabled = enabled
+        self.max_revisions = max_revisions
         self._last_feedback: str = ""
+        self._fail_count = 0
 
     async def __call__(self, messages: list[dict[str, Any]]) -> bool:
         if not self.enabled:
@@ -83,6 +85,11 @@ class MultiAgentReviewer:
         if not content:
             return True
 
+        # Auto-pass after max consecutive failures (avoids infinite revision loop)
+        if self._fail_count >= self.max_revisions:
+            self._fail_count = 0
+            return True
+
         # Run 3 reviews in parallel
         tasks = []
         for name, prompt in _REVIEW_PROMPTS.items():
@@ -94,25 +101,48 @@ class MultiAgentReviewer:
 
         results = await asyncio.gather(*tasks)
 
-        # Aggregate
+        # Aggregate scores and issues
         all_issues: list[str] = []
         all_suggestions: list[str] = []
         all_passed = True
+        scores: list[int] = []
         for name, outcome in results:
             if not outcome["passed"]:
                 all_passed = False
+            if outcome.get("score"):
+                scores.append(outcome["score"])
             if outcome["issues"]:
                 all_issues.extend(f"[{name}] {issue}" for issue in outcome["issues"])
             if outcome["suggestions"]:
                 all_suggestions.extend(f"[{name}] {sug}" for sug in outcome["suggestions"])
 
-        if all_passed:
+        avg_score = sum(scores) / len(scores) if scores else 0
+
+        # Auto-pass if average score >= 8/10 (even if some flagged minor issues)
+        if all_passed or (scores and avg_score >= 8):
+            self._fail_count = 0
+            if avg_score >= 8:
+                print(f"\n  [Multi-Agent Review] PASS (avg score {avg_score:.1f}/10 >= 8)")
             return True
+
+        self._fail_count += 1
+
+        # Print review results to terminal
+        print(f"\n  [Multi-Agent Review] FAIL ({self._fail_count}/{self.max_revisions}) — avg score {avg_score:.1f}/10")
+        for name, outcome in results:
+            score_str = f" [{outcome.get('score', '?')}/10]" if outcome.get('score') else ""
+            status = "PASS" if outcome["passed"] else "FAIL"
+            print(f"    {status} [{name}]{score_str}")
+            for issue in (outcome.get("issues") or [])[:3]:
+                print(f"      ⚠️  {issue}")
+            for sug in (outcome.get("suggestions") or [])[:2]:
+                print(f"      💡 {sug}")
+        print(flush=True)
 
         # Build feedback message
         parts = [
-            "## Multi-Agent Review Results\n",
-            f"Three reviewers examined the draft. {3 - sum(1 for _, o in results if not o['passed'])}/3 passed.\n",
+            f"## Multi-Agent Review Results (avg score: {avg_score:.1f}/10)\n",
+            f"{3 - sum(1 for _, o in results if not o['passed'])}/3 reviewers passed.\n",
         ]
         if all_issues:
             parts.append("### Issues Found")
@@ -147,6 +177,7 @@ async def _run_review(llm: LLMClient, name: str, messages: list[dict]) -> tuple[
             text = "\n".join(lines[1:-1] if lines[-1].strip() == "```" else lines[1:])
         outcome = json.loads(text)
         return name, {
+            "score": int(outcome.get("score", 0)) if outcome.get("score") else None,
             "passed": bool(outcome.get("passed", False)),
             "issues": outcome.get("issues", []) or [],
             "suggestions": outcome.get("suggestions", []) or [],

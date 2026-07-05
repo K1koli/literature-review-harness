@@ -5,7 +5,7 @@ from dataclasses import asdict, dataclass
 from typing import Any
 
 from ..state.kb import LiteratureKB
-from ..validation.citations import EVIDENCE_ID_RE
+from ..validation.citations import PAPER_ID_RE
 
 
 HEADING_RE = re.compile(r"^(#{1,6})\s+(.+?)\s*$")
@@ -109,7 +109,7 @@ def parse_markdown_sections(markdown: str) -> list[SurveySection]:
                 end = next_start
                 break
         body = "\n".join(lines[start + 1 : end]).strip()
-        evidence_ids = sorted(set(EVIDENCE_ID_RE.findall(body)))
+        evidence_ids = sorted(set(PAPER_ID_RE.findall(body)))
         sections.append(SurveySection(level=level, title=title, body=body, start_line=start, evidence_ids=evidence_ids))
     return sections
 
