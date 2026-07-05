@@ -65,7 +65,28 @@ class PrepareSurveyContextTool:
         }
         if use_llm and self.llm is not None:
             payload = await _add_llm_survey_design(self.llm, payload)
-        return json.dumps(payload, ensure_ascii=False, indent=2)
+        return json.dumps(_display_order(payload), ensure_ascii=False, indent=2)
+
+
+def _display_order(payload: dict[str, Any]) -> dict[str, Any]:
+    ordered: dict[str, Any] = {}
+    for key in [
+        "purpose",
+        "focus",
+        "outline_status",
+        "recommended_outline",
+        "survey_design",
+        "survey_design_error",
+        "coverage",
+        "timeline",
+        "citation_map",
+    ]:
+        if key in payload:
+            ordered[key] = payload[key]
+    for key, value in payload.items():
+        if key not in ordered:
+            ordered[key] = value
+    return ordered
 
 
 async def _add_llm_survey_design(llm: Any, payload: dict[str, Any]) -> dict[str, Any]:
