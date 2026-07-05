@@ -20,6 +20,15 @@ class ReviewFakeLLM:
         return {"content": json.dumps(outcome)}
 
 
+class BrokenReviewLLM:
+    def __init__(self) -> None:
+        self.calls = 0
+
+    async def chat(self, messages, tools=None):
+        self.calls += 1
+        raise TimeoutError()
+
+
 class MultiAgentReviewTest(unittest.TestCase):
     def test_review_text_runs_three_reviews_and_aggregates_feedback(self) -> None:
         llm = ReviewFakeLLM(
@@ -56,6 +65,17 @@ class MultiAgentReviewTest(unittest.TestCase):
         self.assertTrue(passed)
         self.assertEqual(feedback, "")
         self.assertEqual(reviewer.failure_count, 0)
+
+    def test_review_agent_exception_skips_review_without_revision_feedback(self) -> None:
+        llm = BrokenReviewLLM()
+        reviewer = MultiAgentReviewer(llm, LiteratureKB(), topic="World Models")
+
+        passed, feedback = asyncio.run(reviewer.review_text("draft " * 2000))
+
+        self.assertTrue(passed)
+        self.assertEqual(feedback, "")
+        self.assertEqual(reviewer.report_dict()["status"], "skipped")
+        self.assertEqual(llm.calls, 3)
 
 
 if __name__ == "__main__":

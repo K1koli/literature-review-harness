@@ -6,7 +6,6 @@ import json
 import mimetypes
 import shutil
 import threading
-import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -18,7 +17,6 @@ from urllib.parse import unquote, urlparse
 
 from src.demo.artifacts import build_summary, load_review_payload
 from src.demo.pdf import write_review_pdf
-from src.demo.sample import existing_sample_is_ready, write_fallback_sample
 from src.exporters import export_html, export_latex
 from src.review_runner import ConfigError, run_literature_review
 
@@ -105,9 +103,6 @@ class DemoHandler(BaseHTTPRequestHandler):
         if path == "/api/reviews":
             self._create_live_run()
             return
-        if path == "/api/reviews/sample":
-            self._create_sample_run()
-            return
         self.send_error(HTTPStatus.NOT_FOUND, "Not found")
 
     def log_message(self, fmt: str, *args: Any) -> None:
@@ -149,14 +144,6 @@ class DemoHandler(BaseHTTPRequestHandler):
             return
         state = _new_run(topic, mode="live")
         thread = threading.Thread(target=_run_live_review, args=(state,), daemon=True)
-        thread.start()
-        self._send_json({"run_id": state.run_id, "status": state.status, "events": f"/api/reviews/{state.run_id}/events"})
-
-    def _create_sample_run(self) -> None:
-        data = self._read_json_body()
-        topic = _clean_topic(data.get("topic")) or "World Models（世界模型）"
-        state = _new_run(topic, mode="sample")
-        thread = threading.Thread(target=_run_sample_review, args=(state,), daemon=True)
         thread.start()
         self._send_json({"run_id": state.run_id, "status": state.status, "events": f"/api/reviews/{state.run_id}/events"})
 
@@ -295,83 +282,6 @@ def _run_live_review(state: RunState) -> None:
         )
     except Exception as exc:
         state.fail(str(exc))
-
-
-def _run_sample_review(state: RunState) -> None:
-    sample_dir = PROJECT_ROOT / "output"
-    missing = [name for name in ["evidence_pack.json"] if not (sample_dir / name).exists()]
-    if missing:
-        state.fail(
-            "No local sample evidence pack was found. Run the CLI once or start a live review.",
-            details={"missing": missing},
-        )
-        return
-
-    for event in _sample_events(state):
-        state.add_event(event)
-        time.sleep(0.18)
-    if existing_sample_is_ready(sample_dir):
-        for name in [
-            "survey.md",
-            "survey.html",
-            "survey.tex",
-            "evidence_pack.json",
-            "check_report.json",
-            "skill_trace.json",
-            "figure_plan.json",
-        ]:
-            source = sample_dir / name
-            if source.exists():
-                shutil.copy2(source, state.output_dir / name)
-        figures = sample_dir / "figures"
-        if figures.exists():
-            shutil.copytree(figures, state.output_dir / "figures", dirs_exist_ok=True)
-    else:
-        write_fallback_sample(
-            topic=state.topic,
-            evidence_pack_path=sample_dir / "evidence_pack.json",
-            output_dir=state.output_dir,
-        )
-    _finalize_artifacts(state)
-
-
-def _sample_events(state: RunState) -> list[dict[str, Any]]:
-    return [
-        {"type": "components_build_started", "topic": state.topic, "model": "sample replay", "mineru_enabled": False},
-        {"type": "skill_system_enabled", "skill_count": 3},
-        {
-            "type": "components_ready",
-            "tools": [
-                "build_literature_kb",
-                "list_evidence",
-                "read_evidence",
-                "search_literature",
-                "read_context",
-                "list_parsed_papers",
-                "read_parsed_paper",
-                "search_parsed_paper",
-                "prepare_survey_context",
-            ],
-        },
-        {"type": "run_started", "task_preview": f"Sample replay for {state.topic}", "available_tools": ["build_literature_kb", "prepare_survey_context", "skills_load_for_phase"]},
-        {"type": "iteration_started", "iteration": 1, "max_iterations": 20},
-        {"type": "context_prepared", "iteration": 1, "message_count": 2, "tool_count": 14},
-        {"type": "llm_call_started", "iteration": 1},
-        {"type": "llm_response", "iteration": 1, "mode": "tool_calls", "tool_call_count": 1, "tool_names": ["build_literature_kb"]},
-        {"type": "tool_call_started", "iteration": 1, "index": 1, "total": 1, "name": "build_literature_kb", "arguments": {"query": state.topic}},
-        {"type": "tool_call_finished", "iteration": 1, "index": 1, "total": 1, "name": "build_literature_kb", "result_preview": "Loaded sample Sciverse evidence pack and MinerU audit states.", "result_chars": 92},
-        {"type": "iteration_started", "iteration": 2, "max_iterations": 20},
-        {"type": "llm_response", "iteration": 2, "mode": "tool_calls", "tool_call_count": 3, "tool_names": ["skills_route_for_phase", "skills_load_for_phase", "prepare_survey_context"]},
-        {"type": "tool_call_finished", "iteration": 2, "index": 1, "total": 3, "name": "skills_route_for_phase", "result_preview": "Selected survey-writing and citation-grounding protocols.", "result_chars": 72},
-        {"type": "tool_call_finished", "iteration": 2, "index": 2, "total": 3, "name": "skills_load_for_phase", "result_preview": "Loaded writing guidance as protocol, not factual evidence.", "result_chars": 68},
-        {"type": "tool_call_finished", "iteration": 2, "index": 3, "total": 3, "name": "prepare_survey_context", "result_preview": "Built timeline, citation map, outline, and evidence needs.", "result_chars": 78},
-        {"type": "iteration_started", "iteration": 3, "max_iterations": 20},
-        {"type": "llm_response", "iteration": 3, "mode": "final_content", "content_chars": 21472},
-        {"type": "stop_condition", "iteration": 3, "name": "MultiAgentReviewer", "passed": True, "report": None},
-        {"type": "stop_condition", "iteration": 3, "name": "CitationVerifier", "passed": True, "report": {"status": "pass"}},
-        {"type": "image_generation_finished", "enabled": False, "generated": 0, "skipped_reason": "sample replay"},
-        {"type": "artifacts_written", "citation_status": "pass", "total_characters": 21472},
-    ]
 
 
 def _finalize_artifacts(state: RunState) -> None:

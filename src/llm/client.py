@@ -3,6 +3,10 @@ import httpx
 from typing import Any
 
 
+class LLMRequestError(RuntimeError):
+    """Raised when the upstream OpenAI-compatible LLM request cannot complete."""
+
+
 class LLMClient:
     """OpenAI-compatible LLM client for Intern-S2-Preview API."""
 
@@ -26,18 +30,31 @@ class LLMClient:
             body["tools"] = tools
             body["tool_choice"] = "auto"
 
-        response = await self._client.post(
-            f"{self.api_base}/chat/completions",
-            headers={
-                "Authorization": f"Bearer {self.api_key}",
-                "Content-Type": "application/json",
-            },
-            json=body,
-        )
-        response.raise_for_status()
-        data = response.json()
-        choice = data["choices"][0]
-        return choice["message"]
+        try:
+            response = await self._client.post(
+                f"{self.api_base}/chat/completions",
+                headers={
+                    "Authorization": f"Bearer {self.api_key}",
+                    "Content-Type": "application/json",
+                },
+                json=body,
+            )
+            response.raise_for_status()
+            data = response.json()
+            choice = data["choices"][0]
+            return choice["message"]
+        except httpx.HTTPStatusError as exc:
+            body_preview = exc.response.text[:800].replace("\n", " ")
+            raise LLMRequestError(
+                f"HTTP {exc.response.status_code} from LLM API: {body_preview}"
+            ) from exc
+        except httpx.TimeoutException as exc:
+            raise LLMRequestError(f"{exc.__class__.__name__}: request timed out") from exc
+        except httpx.HTTPError as exc:
+            error = str(exc) or exc.__class__.__name__
+            raise LLMRequestError(f"{exc.__class__.__name__}: {error}") from exc
+        except (KeyError, IndexError, json.JSONDecodeError) as exc:
+            raise LLMRequestError(f"Malformed LLM response: {exc.__class__.__name__}: {exc}") from exc
 
     async def close(self):
         await self._client.aclose()

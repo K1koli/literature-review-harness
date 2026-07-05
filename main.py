@@ -122,8 +122,8 @@ async def main():
         max_iterations=config.max_iterations,
         verbose=True,
     )
-    loop.add_stop_condition(reviewer)
     loop.add_stop_condition(verifier)
+    loop.add_stop_condition(reviewer)
 
     user_message = (
         f"Please generate a comprehensive academic literature survey on the following topic: "

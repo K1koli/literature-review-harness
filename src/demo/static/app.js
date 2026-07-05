@@ -2,7 +2,6 @@ const els = {
   form: document.getElementById("reviewForm"),
   topic: document.getElementById("topicInput"),
   runButton: document.getElementById("runButton"),
-  sampleButton: document.getElementById("sampleButton"),
   statusDot: document.getElementById("statusDot"),
   statusText: document.getElementById("statusText"),
   messageList: document.getElementById("messageList"),
@@ -35,11 +34,7 @@ let currentPayload = null;
 
 els.form.addEventListener("submit", (event) => {
   event.preventDefault();
-  startRun("/api/reviews");
-});
-
-els.sampleButton.addEventListener("click", () => {
-  startRun("/api/reviews/sample");
+  startRun();
 });
 
 els.topic.addEventListener("input", () => {
@@ -59,15 +54,17 @@ els.markdownView.addEventListener("click", (event) => {
   chip.classList.add("active");
 });
 
-async function startRun(endpoint) {
+async function startRun() {
   const topic = els.topic.value.trim();
   if (!topic) {
     setStatus("error", "Topic is required");
     return;
   }
   resetRun(topic);
-  setStatus("running", endpoint.endsWith("sample") ? "Loading sample" : "Running harness");
-  const response = await fetch(endpoint, {
+  els.topic.value = "";
+  els.topic.style.height = "auto";
+  setStatus("running", "Running harness");
+  const response = await fetch("/api/reviews", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ topic }),
@@ -154,7 +151,6 @@ function setStatus(kind, text) {
   els.statusText.textContent = text;
   const busy = kind === "running";
   els.runButton.disabled = busy;
-  els.sampleButton.disabled = busy;
 }
 
 function appendTrace(event) {

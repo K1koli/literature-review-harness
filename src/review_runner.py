@@ -177,8 +177,8 @@ async def run_literature_review(
         verbose=verbose,
         event_sink=event_sink,
     )
-    loop.add_stop_condition(reviewer)
     loop.add_stop_condition(verifier)
+    loop.add_stop_condition(reviewer)
 
     _emit(event_sink, "components_ready", tools=registry.list_names())
     try:

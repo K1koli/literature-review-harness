@@ -107,9 +107,10 @@ class AgentLoop:
             try:
                 response = await self.llm.chat(msgs, tools)
             except Exception as e:
-                self._log(f"LLM call failed: {e}")
-                self._emit("llm_call_failed", iteration=iteration, error=str(e))
-                return f"Error calling LLM: {e}"
+                error = str(e) or e.__class__.__name__
+                self._log(f"LLM call failed: {error}")
+                self._emit("llm_call_failed", iteration=iteration, error=error)
+                return f"Error calling LLM: {error}"
 
             # Apply post-LLM hooks (hallucination check)
             for hook in self._post_llm_hooks:
@@ -221,6 +222,15 @@ class AgentLoop:
                     if not result:
                         all_stop = False
                         self._log(f"Stop condition not met, continuing...")
+                        if getattr(cond, "exit_loop_on_failure", False):
+                            self._log(f"{cond.__class__.__name__} requested loop exit on failure.")
+                            self._emit(
+                                "stop_condition_exit",
+                                iteration=iteration,
+                                name=cond.__class__.__name__,
+                                content_chars=len(content),
+                            )
+                            return content
                         break
 
                 if all_stop:

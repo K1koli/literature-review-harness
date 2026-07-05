@@ -64,6 +64,8 @@ class MultiAgentReviewer:
         loop.add_stop_condition(reviewer)
     """
 
+    exit_loop_on_failure = True
+
     def __init__(
         self,
         llm: LLMClient,
@@ -79,6 +81,7 @@ class MultiAgentReviewer:
         self.timeout_seconds = timeout_seconds
         self._last_feedback: str = ""
         self._failure_count = 0
+        self._last_report: dict[str, Any] = {"status": "not_run", "reviewer_errors": [], "issues": []}
 
     async def __call__(self, messages: list[dict[str, Any]]) -> bool:
         if not self.enabled:
@@ -101,6 +104,7 @@ class MultiAgentReviewer:
 
     async def review_text(self, content: str) -> tuple[bool, str]:
         if not self.enabled or not content.strip():
+            self._last_report = {"status": "disabled" if not self.enabled else "empty", "reviewer_errors": [], "issues": []}
             return True, ""
 
         tasks = []
@@ -125,14 +129,31 @@ class MultiAgentReviewer:
                         name,
                         {
                             "passed": True,
+                            "skipped": True,
                             "issues": [],
                             "suggestions": [],
-                            "note": f"review skipped after {self.timeout_seconds}s timeout",
+                            "error": f"{result.__class__.__name__}: {result}",
                         },
                     )
                 )
             else:
                 results.append(result)
+
+        reviewer_errors = [
+            {"reviewer": name, "error": str(outcome.get("error") or outcome.get("note") or "review skipped")}
+            for name, outcome in results
+            if outcome.get("skipped")
+        ]
+        if reviewer_errors:
+            self._failure_count = 0
+            self._last_feedback = ""
+            self._last_report = {
+                "status": "skipped",
+                "reviewer_errors": reviewer_errors,
+                "issues": [],
+                "suggestions": [],
+            }
+            return True, ""
 
         # Aggregate
         all_issues: list[str] = []
@@ -149,6 +170,12 @@ class MultiAgentReviewer:
         if all_passed:
             self._failure_count = 0
             self._last_feedback = ""
+            self._last_report = {
+                "status": "pass",
+                "reviewer_errors": [],
+                "issues": [],
+                "suggestions": [],
+            }
             return True, ""
 
         # Build feedback message
@@ -172,6 +199,13 @@ class MultiAgentReviewer:
         )
 
         self._last_feedback = "\n".join(parts)
+        self._last_report = {
+            "status": "fail",
+            "reviewer_errors": [],
+            "issues": all_issues,
+            "suggestions": all_suggestions,
+            "failure_count": self._failure_count,
+        }
         return False, self._last_feedback
 
     @property
@@ -181,6 +215,9 @@ class MultiAgentReviewer:
     @property
     def failure_count(self) -> int:
         return self._failure_count
+
+    def report_dict(self) -> dict[str, Any]:
+        return dict(self._last_report)
 
 
 async def _run_review(llm: LLMClient, name: str, messages: list[dict]) -> tuple[str, dict[str, Any]]:
@@ -198,9 +235,20 @@ async def _run_review(llm: LLMClient, name: str, messages: list[dict]) -> tuple[
             "issues": outcome.get("issues", []) or [],
             "suggestions": outcome.get("suggestions", []) or [],
         }
-    except (json.JSONDecodeError, Exception):
+    except json.JSONDecodeError as exc:
         return name, {
             "passed": True,
+            "skipped": True,
+            "error": f"invalid reviewer JSON: {exc}",
+            "issues": [],
+            "suggestions": [],
+        }
+    except Exception as exc:
+        error = str(exc) or exc.__class__.__name__
+        return name, {
+            "passed": True,
+            "skipped": True,
+            "error": error,
             "issues": [],
             "suggestions": [],
         }

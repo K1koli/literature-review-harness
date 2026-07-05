@@ -67,7 +67,7 @@ python3 main.py "World Models in deep reinforcement learning"
 python3 -m src.demo.server --host 127.0.0.1 --port 8000
 ```
 
-打开 `http://127.0.0.1:8000` 后输入综述主题。`生成` 会调用真实 harness；`样例` 会回放本地 `output/` 下已有的 World Models 运行包，适合无 API key 时展示。页面会通过 SSE 展示 AgentLoop、工具调用、Skill 加载、survey context、审查、引用校验和导出事件；完成后运行过程会自动收起，并展示渲染后的 Markdown、PDF 预览和下载链接。
+打开 `http://127.0.0.1:8000` 后输入综述主题并点击 `生成`。页面会调用真实 harness，通过 SSE 展示 AgentLoop、工具调用、Skill 加载、survey context、审查、引用校验和导出事件；完成后运行过程会自动收起，并展示渲染后的 Markdown、PDF 预览和下载链接。
 
 输出文件：
 

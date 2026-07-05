@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import json
 import tempfile
 import unittest
 from pathlib import Path
 
 from src.demo.artifacts import build_summary
 from src.demo.pdf import write_review_pdf
-from src.demo.sample import existing_sample_is_ready, write_fallback_sample
 
 
 class DemoArtifactsTest(unittest.TestCase):
@@ -70,40 +68,15 @@ class DemoArtifactsTest(unittest.TestCase):
             self.assertTrue(payload.startswith(b"%PDF"))
             self.assertGreater(len(payload), 300)
 
-    def test_fallback_sample_writes_demo_article_and_figure(self) -> None:
-        evidence_pack = {
-            "papers": [
-                {
-                    "paper_id": "P001",
-                    "title": "World Models",
-                    "year": 2018,
-                    "evidence_ids": ["P001-E01"],
-                }
-            ],
-            "evidence": [
-                {
-                    "evidence_id": "P001-E01",
-                    "paper_id": "P001",
-                    "title": "World Models",
-                    "year": 2018,
-                    "source": "sciverse_semantic",
-                    "text": "World models learn compact environment representations for planning.",
-                }
-            ],
-        }
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            pack_path = root / "evidence_pack.json"
-            pack_path.write_text(json.dumps(evidence_pack), encoding="utf-8")
-            output_dir = root / "demo"
+    def test_demo_ui_only_exposes_generate_and_clears_prompt(self) -> None:
+        root = Path(__file__).resolve().parents[1]
+        index_html = (root / "src" / "demo" / "static" / "index.html").read_text(encoding="utf-8")
+        app_js = (root / "src" / "demo" / "static" / "app.js").read_text(encoding="utf-8")
 
-            write_fallback_sample(topic="World Models", evidence_pack_path=pack_path, output_dir=output_dir)
-
-            markdown = (output_dir / "survey.md").read_text(encoding="utf-8")
-            self.assertIn("![Evidence-grounded harness flow](figures/sample_harness_flow.svg)", markdown)
-            self.assertIn("P001-E01", markdown)
-            self.assertTrue((output_dir / "figures" / "sample_harness_flow.svg").exists())
-            self.assertTrue(existing_sample_is_ready(output_dir))
+        self.assertNotIn("sampleButton", index_html)
+        self.assertNotIn("样例", index_html)
+        self.assertNotIn("/api/reviews/sample", app_js)
+        self.assertIn('els.topic.value = "";', app_js)
 
 
 if __name__ == "__main__":
