@@ -44,7 +44,8 @@ class ImageGenerationTest(unittest.TestCase):
             self.assertIn("](images/figure.png)", survey)
             self.assertIn("F001. Conceptual Overview", survey)
             self.assertLess(survey.index("figure.png"), survey.index("Body with evidence"))
-            self.assertIn("Sources: P001-E01", survey)
+            self.assertNotIn("Sources:", survey)
+            self.assertIn("Figure F001 summarizes", survey)
 
     def test_planner_uses_sections_citations_and_caps_figure_count(self) -> None:
         kb = LiteratureKB()
@@ -65,7 +66,8 @@ class ImageGenerationTest(unittest.TestCase):
         self.assertEqual(len(plans), 2)
         self.assertEqual(plans[0].target_heading, "1. Introduction and Background")
         self.assertEqual(plans[0].render_mode, "image")
-        self.assertEqual(plans[1].render_mode, "svg")
+        self.assertEqual(plans[1].render_mode, "image")
+        self.assertEqual(plans[0].figure_type, "literature_taxonomy_map")
         self.assertEqual(plans[0].source_evidence_ids, ["P001-E01"])
 
     def test_planner_can_select_multiple_section_figure_types(self) -> None:

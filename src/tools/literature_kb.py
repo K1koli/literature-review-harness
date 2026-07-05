@@ -58,11 +58,26 @@ def _authors(value: Any) -> list[str]:
         names = []
         for item in value:
             if isinstance(item, str):
-                names.append(item)
+                name = _clean_author_name(item)
+                if name:
+                    names.append(name)
             elif isinstance(item, dict) and item.get("name"):
-                names.append(str(item["name"]))
+                name = _clean_author_name(str(item["name"]))
+                if name:
+                    names.append(name)
         return names[:12]
     return []
+
+
+def _clean_author_name(value: str) -> str:
+    name = re.sub(r"\s+", " ", value).strip()
+    if not name:
+        return ""
+    if re.fullmatch(r"[\[\]\d\s,;|.-]+", name):
+        return ""
+    if name.count("[") >= 2 and len(re.findall(r"\d{2,3}", name)) >= 8:
+        return ""
+    return name
 
 
 def _arxiv_pdf_from_identifier(value: str | None) -> str | None:

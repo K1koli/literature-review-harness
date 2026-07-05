@@ -31,6 +31,27 @@ class ExporterTest(unittest.TestCase):
             self.assertIn("<th>Method</th>", rendered)
             self.assertIn('<code class="evidence-id">P001-E01</code>', rendered)
 
+    def test_html_export_renders_reference_entries_as_separate_list_items(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            markdown = root / "survey.md"
+            html = root / "survey.html"
+            markdown.write_text(
+                "# Survey\n\n"
+                "## References\n\n"
+                "[1] First paper. 2024. paper_id: P001.\n"
+                "[2] Second paper. 2025. paper_id: P002.\n",
+                encoding="utf-8",
+            )
+
+            export_html(markdown, html, title="Survey")
+            rendered = html.read_text(encoding="utf-8")
+
+            self.assertIn('<ol class="references">', rendered)
+            self.assertIn('<li value="1">First paper. 2024. paper_id: P001.</li>', rendered)
+            self.assertIn('<li value="2">Second paper. 2025. paper_id: P002.</li>', rendered)
+            self.assertNotIn("P001. [2] Second", rendered)
+
 
 if __name__ == "__main__":
     unittest.main()
