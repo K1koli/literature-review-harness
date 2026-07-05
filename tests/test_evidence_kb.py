@@ -10,6 +10,7 @@ from src.tools.literature_kb import ListParsedPapersTool, ReadParsedPaperTool, S
 from src.tools.mineru import MinerUConfig, mineru_evidence_chunks, run_mineru_for_kb
 from src.tools.survey_context import PrepareSurveyContextTool
 from src.validation.citations import CitationVerifier
+from src.validation.repair import repair_missing_evidence_citations
 
 
 class EvidenceKBTest(unittest.TestCase):
@@ -302,6 +303,23 @@ class CitationVerifierTest(unittest.TestCase):
         )
 
         self.assertEqual(report.status, "pass")
+
+    def test_repair_missing_evidence_citations_reuses_existing_ids(self) -> None:
+        kb = LiteratureKB()
+        paper = kb.upsert_paper(title="World Models")
+        evidence = kb.add_evidence(paper, text=" ".join(["world"] * 40), source="sciverse_semantic")
+        assert evidence is not None
+
+        repaired = repair_missing_evidence_citations(
+            "# Survey\n\n"
+            "## Introduction\n\n"
+            f"This paragraph already cites evidence and anchors the section [{evidence.evidence_id}].\n\n"
+            "This long paragraph has a substantive claim but lacks a citation, so the finalizer should attach an existing evidence id.",
+            kb,
+        )
+
+        self.assertGreaterEqual(repaired.count(f"[{evidence.evidence_id}]"), 2)
+        self.assertEqual(CitationVerifier(kb).validate_text(repaired).status, "pass")
 
 
 if __name__ == "__main__":

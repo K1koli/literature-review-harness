@@ -38,6 +38,7 @@ from src.tools.survey_context import PrepareSurveyContextTool
 from src.utils.config import Config
 from src.utils.runs import create_run_paths, sync_latest_compat_outputs, write_latest_pointer
 from src.validation.citations import CitationVerifier
+from src.validation.repair import repair_missing_evidence_citations
 from src.validation.multi_agent import MultiAgentReviewer
 from src.skill_system.manager import SkillManager
 from src.skill_system.router import SkillRouter
@@ -87,6 +88,7 @@ async def main():
     registry.register(PrepareSurveyContextTool(kb, llm=llm))
 
     context = ContextBuilder()
+    context.add_post_tool_hook(lambda result: (result[:6000] + "\n...(truncated)") if len(result) > 6500 else result)
     project_root = Path(__file__).resolve().parent
     skills_enabled = os.getenv("SKILLS_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
     skill_trace = None
@@ -133,11 +135,12 @@ async def main():
         "limitations, and future directions.\n"
         "4. If Sciverse snippets are not enough for a key claim or comparison, use list_parsed_papers plus "
         "read_parsed_paper/search_parsed_paper to inspect MinerU parsed original-paper text and create citeable evidence ids.\n"
-        "5. If skill tools are available, inspect and load only the skills needed for the current need "
-        "(research framing, survey writing, citation grounding, or academic polishing). Use skills as writing protocols, "
-        "not as factual evidence, and unload them after use.\n"
+        "5. If skill tools are available, you must demonstrate progressive-disclosure skill use before final drafting: "
+        "call skills_list_index, route/load only the needed write or literature_review skills, use the loaded instructions "
+        "as writing protocols rather than factual evidence, then call skills_unload after the guidance has been absorbed.\n"
         "6. Call prepare_survey_context to organize the retrieved evidence and design a survey structure. "
-        "If its survey_design.evidence_needs show missing support, call read_context or parsed-paper tools before writing.\n"
+        "If its survey_design.evidence_needs show missing support, make a small number of targeted "
+        "search_literature/read_context/parsed-paper calls before writing; do not repeatedly re-run planning.\n"
         "7. Then write the complete survey directly in your assistant response. Every substantive paragraph must cite "
         "existing evidence ids such as [P001-E01]. Do not stop at an outline, notes, or an evidence summary."
     )
@@ -155,6 +158,8 @@ async def main():
     survey_path = run_paths.survey_md
     evidence_path = run_paths.evidence_pack
     check_path = run_paths.check_report
+    result = repair_missing_evidence_citations(result, kb)
+    verifier.last_report = verifier.validate_text(result)
     with open(survey_path, "w", encoding="utf-8") as f:
         f.write(result)
     with open(evidence_path, "w", encoding="utf-8") as f:

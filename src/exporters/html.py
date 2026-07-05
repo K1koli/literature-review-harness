@@ -18,6 +18,8 @@ def _markdown_to_html(markdown: str) -> str:
     html_lines: list[str] = []
     paragraph: list[str] = []
     list_items: list[str] = []
+    ordered_items: list[str] = []
+    table_rows: list[list[str]] = []
     in_figure = False
 
     def flush_paragraph() -> None:
@@ -34,57 +36,121 @@ def _markdown_to_html(markdown: str) -> str:
             html_lines.append("</ul>")
             list_items = []
 
+    def flush_ordered_list() -> None:
+        nonlocal ordered_items
+        if ordered_items:
+            html_lines.append("<ol>")
+            html_lines.extend(f"<li>{_inline(item)}</li>" for item in ordered_items)
+            html_lines.append("</ol>")
+            ordered_items = []
+
+    def flush_table() -> None:
+        nonlocal table_rows
+        if not table_rows:
+            return
+        if len(table_rows) >= 2 and all(_is_separator_cell(cell) for cell in table_rows[1]):
+            header = table_rows[0]
+            body_rows = table_rows[2:]
+        else:
+            header = []
+            body_rows = table_rows
+        html_lines.append("<table>")
+        if header:
+            html_lines.append("<thead><tr>")
+            html_lines.extend(f"<th>{_inline(cell)}</th>" for cell in header)
+            html_lines.append("</tr></thead>")
+        if body_rows:
+            html_lines.append("<tbody>")
+            for row in body_rows:
+                html_lines.append("<tr>")
+                html_lines.extend(f"<td>{_inline(cell)}</td>" for cell in row)
+                html_lines.append("</tr>")
+            html_lines.append("</tbody>")
+        html_lines.append("</table>")
+        table_rows = []
+
     for raw in lines:
         line = raw.rstrip()
         if not line.strip():
             flush_paragraph()
             flush_list()
+            flush_ordered_list()
+            flush_table()
             continue
         if line.startswith("<figure"):
             flush_paragraph()
             flush_list()
+            flush_ordered_list()
+            flush_table()
             in_figure = True
             html_lines.append(line)
             continue
         if line.startswith("</figure"):
             flush_paragraph()
             flush_list()
+            flush_ordered_list()
+            flush_table()
             in_figure = False
             html_lines.append(line)
             continue
         if line.startswith("<figcaption"):
             flush_paragraph()
             flush_list()
+            flush_ordered_list()
+            flush_table()
             html_lines.append(_inline_raw_html(line))
+            continue
+        if _is_table_line(line):
+            flush_paragraph()
+            flush_list()
+            flush_ordered_list()
+            table_rows.append(_parse_table_row(line))
             continue
         heading = re.match(r"^(#{1,6})\s+(.+)$", line)
         if heading:
             flush_paragraph()
             flush_list()
+            flush_ordered_list()
+            flush_table()
             level = len(heading.group(1))
             html_lines.append(f"<h{level}>{_inline(heading.group(2).strip())}</h{level}>")
             continue
         if line.strip() == "---":
             flush_paragraph()
             flush_list()
+            flush_ordered_list()
+            flush_table()
             html_lines.append("<hr/>")
             continue
         image = re.match(r"^!\[(.*?)\]\((.*?)\)$", line.strip())
         if image:
             flush_paragraph()
             flush_list()
+            flush_ordered_list()
+            flush_table()
             alt = html.escape(image.group(1))
             src = html.escape(image.group(2))
             html_lines.append(f'<img src="{src}" alt="{alt}" loading="lazy"/>')
             continue
         if line.startswith("- "):
             flush_paragraph()
+            flush_ordered_list()
+            flush_table()
             list_items.append(line[2:].strip())
+            continue
+        ordered = re.match(r"^\d+\.\s+(.+)$", line)
+        if ordered:
+            flush_paragraph()
+            flush_list()
+            flush_table()
+            ordered_items.append(ordered.group(1).strip())
             continue
         paragraph.append(line.strip())
 
     flush_paragraph()
     flush_list()
+    flush_ordered_list()
+    flush_table()
     return "\n".join(html_lines)
 
 
@@ -98,6 +164,19 @@ def _inline(text: str) -> str:
 def _inline_raw_html(text: str) -> str:
     text = re.sub(r"<strong>(.*?)</strong>", lambda m: f"<strong>{html.escape(m.group(1))}</strong>", text)
     return EVIDENCE_ID_RE.sub(lambda m: f'<code class="evidence-id">{m.group(0)}</code>', text)
+
+
+def _is_table_line(line: str) -> bool:
+    stripped = line.strip()
+    return stripped.startswith("|") and stripped.endswith("|") and stripped.count("|") >= 2
+
+
+def _parse_table_row(line: str) -> list[str]:
+    return [cell.strip() for cell in line.strip().strip("|").split("|")]
+
+
+def _is_separator_cell(cell: str) -> bool:
+    return bool(re.fullmatch(r":?-{3,}:?", cell.strip()))
 
 
 def _page(title: str, body: str) -> str:
@@ -190,6 +269,25 @@ def _page(title: str, body: str) -> str:
     }}
     ul {{
       padding-left: 24px;
+    }}
+    ol {{
+      padding-left: 24px;
+    }}
+    table {{
+      width: 100%;
+      border-collapse: collapse;
+      margin: 22px 0 30px;
+      font-size: 14px;
+    }}
+    th, td {{
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      vertical-align: top;
+    }}
+    th {{
+      background: #f2f6fb;
+      color: #173b68;
+      text-align: left;
     }}
     @media (max-width: 760px) {{
       main {{

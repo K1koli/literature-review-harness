@@ -74,6 +74,7 @@ async def generate_survey_images(
     manifest_path = image_dir / "figure_manifest.json"
     plan_path = figure_plan_path or (output_dir / "figure_plan.json")
     result = ImageGenerationResult(enabled=True, manifest_path=str(manifest_path), figure_plan_path=str(plan_path))
+    _clean_previous_figures(image_dir)
     if figure_plans is not None:
         plans = figure_plans
     else:
@@ -94,6 +95,7 @@ async def generate_survey_images(
             base_url=config.openai_image_base_url,
             endpoint_path=config.openai_image_endpoint_path,
             model=config.openai_image_model,
+            models=config.openai_image_models,
             size=config.image_generation_size,
             quality=config.image_generation_quality,
             timeout_seconds=config.image_generation_timeout,
@@ -142,6 +144,14 @@ async def generate_survey_images(
         insert_figures_into_sections(survey_path, result.generated)
 
     return result
+
+
+def _clean_previous_figures(image_dir: Path) -> None:
+    if not image_dir.exists():
+        return
+    for path in image_dir.glob("figure_*"):
+        if path.is_file() and path.suffix.lower() in {".png", ".jpg", ".jpeg", ".webp", ".svg"}:
+            path.unlink()
 
 
 def _strip_legacy_illustrations(text: str) -> str:

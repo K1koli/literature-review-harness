@@ -68,6 +68,25 @@ class ImageGenerationTest(unittest.TestCase):
         self.assertEqual(plans[1].render_mode, "svg")
         self.assertEqual(plans[0].source_evidence_ids, ["P001-E01"])
 
+    def test_planner_can_select_multiple_section_figure_types(self) -> None:
+        kb = LiteratureKB()
+        paper = kb.upsert_paper(title="World Models", year=2018)
+        kb.add_evidence(paper, text=" ".join(["robotics evaluation future planning"] * 20), source="test")
+        survey = (
+            "# Survey\n\n"
+            "## 1. Introduction\n\nIntro [P001-E01].\n\n"
+            "## 2. Method Families and Architectures\n\nMethods [P001-E01].\n\n"
+            "## 3. Applications Across RL Domains\n\nApplications [P001-E01].\n\n"
+            "## 4. Evaluation Methodologies and Benchmarks\n\nEvaluation [P001-E01].\n\n"
+            "## 5. Future Research Directions\n\nFuture [P001-E01].\n"
+        )
+
+        plans = plan_survey_figures(topic="World Models", survey_markdown=survey, kb=kb, max_figures=4)
+
+        self.assertEqual(len(plans), 4)
+        self.assertIn("application_map", {plan.figure_type for plan in plans})
+        self.assertIn("comparison_matrix", {plan.figure_type for plan in plans})
+
     def test_section_parser_includes_child_headings_in_parent_body(self) -> None:
         survey = (
             "# Survey\n\n"
@@ -133,6 +152,15 @@ class ImageGenerationTest(unittest.TestCase):
             "https://api.example.test/v1/images/generations",
         )
 
+    def test_generator_accepts_model_fallback_list(self) -> None:
+        generator = OpenAIImageGenerator(
+            api_key="test-key",
+            model="first-model",
+            models=["first-model", "second-model", "first-model"],
+        )
+
+        self.assertEqual(generator.models, ["first-model", "second-model"])
+
     def test_pipeline_writes_manifest_with_fake_generator(self) -> None:
         class FakeGenerator:
             def __init__(self, **kwargs):
@@ -157,6 +185,9 @@ class ImageGenerationTest(unittest.TestCase):
             output = Path(tmp)
             survey_path = output / "survey.md"
             survey_path.write_text("# Survey\n\n## Intro\n\nBody P001-E01.", encoding="utf-8")
+            stale = output / "figures" / "figure_999_old.svg"
+            stale.parent.mkdir()
+            stale.write_text("<svg/>", encoding="utf-8")
             config = Config(
                 image_generation_enabled=True,
                 openai_image_api_key="test-key",
@@ -186,11 +217,13 @@ class ImageGenerationTest(unittest.TestCase):
                             )
                         ],
                     )
-                )
+            )
 
             self.assertEqual(len(result.generated), 1)
+            self.assertEqual(result.generated[0].model, "gpt-image-1")
             self.assertTrue((output / "figures" / "figure_manifest.json").exists())
             self.assertTrue((output / "figure_plan.json").exists())
+            self.assertFalse(stale.exists())
             self.assertIn("figure_001_conceptual_overview.png", survey_path.read_text(encoding="utf-8"))
 
     def _run(self, awaitable):

@@ -21,12 +21,16 @@ class AgentLoop:
         registry: ToolRegistry,
         context: ContextBuilder,
         max_iterations: int = 15,
+        max_revision_rounds: int = 3,
+        max_tool_calls_per_iteration: int = 5,
         verbose: bool = True,
     ):
         self.llm = llm
         self.registry = registry
         self.context = context
         self.max_iterations = max_iterations
+        self.max_revision_rounds = max(0, max_revision_rounds)
+        self.max_tool_calls_per_iteration = max(1, max_tool_calls_per_iteration)
         self.verbose = verbose
         self._post_llm_hooks: list[Callable] = []
         self._stop_conditions: list[Callable] = []
@@ -59,6 +63,7 @@ class AgentLoop:
         self._log(f"Available tools: {self.registry.list_names()}")
         self._log("=" * 60)
 
+        revision_requests = 0
         for iteration in range(1, self.max_iterations + 1):
             self._log(f"\n--- Iteration {iteration}/{self.max_iterations} ---")
 
@@ -83,6 +88,12 @@ class AgentLoop:
             # Check for tool calls
             if self.llm.has_tool_calls(response):
                 tool_calls = self.llm.extract_tool_calls(response)
+                if len(tool_calls) > self.max_tool_calls_per_iteration:
+                    self._log(
+                        f"LLM requested {len(tool_calls)} tool calls; executing first "
+                        f"{self.max_tool_calls_per_iteration} to control context growth."
+                    )
+                    tool_calls = tool_calls[: self.max_tool_calls_per_iteration]
                 self._log(f"LLM requested {len(tool_calls)} tool call(s)")
 
                 if len(tool_calls) > 1:
@@ -120,11 +131,23 @@ class AgentLoop:
                     self._log("Task complete.")
                     return content
                 else:
+                    if revision_requests >= self.max_revision_rounds:
+                        self._log("=" * 60)
+                        self._log(
+                            "Revision budget exhausted; returning latest draft with audit feedback still available."
+                        )
+                        return content
+                    revision_requests += 1
                     # Not all conditions met, but LLM stopped calling tools.
                     # Ask LLM to continue improving.
                     messages.append({
                         "role": "user",
-                        "content": "Please continue improving the survey based on the review feedback above."
+                        "content": (
+                            "Please revise the survey based only on the review feedback above. "
+                            "Do not make it longer unless needed; focus on fixing the cited issues, "
+                            "citation coverage, and structure. "
+                            f"Revision round {revision_requests}/{self.max_revision_rounds}."
+                        )
                     })
                     continue
 

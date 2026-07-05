@@ -3,6 +3,7 @@ __pycache__/
 .env
 output/
 *.pyc
+*.pptx
 configs/skills.toml
 configs/config.toml
 external_skills/

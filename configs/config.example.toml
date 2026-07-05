@@ -22,7 +22,9 @@ api_key_env = "OPENAI_API_KEY"
 base_url = "https://api.openai.com/v1"
 endpoint_path = "/images/generations"
 model = "gpt-image-1"
+# Optional fallback order. The first available model that succeeds is used.
+models = ["gpt-image-1", "gpt-image-2", "dall-e-3"]
 size = "1536x1024"
 quality = "low"
-count = 1
+count = 3
 timeout_seconds = 180

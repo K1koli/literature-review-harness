@@ -51,7 +51,7 @@ def plan_survey_figures(
     deterministic SVG for text-heavy tables or matrices.
     """
 
-    limit = min(max(max_figures, 0), 3)
+    limit = min(max(max_figures, 0), 4)
     if limit == 0:
         return []
 
@@ -62,11 +62,15 @@ def plan_survey_figures(
     if intro:
         candidates.append(_conceptual_overview_plan(topic, intro, kb, skill_guidance))
 
-    methods = _find_section(sections, ["key approaches", "methods", "approaches"])
+    methods = _find_section(sections, ["taxonomy", "method", "architecture", "approach", "paradigm"])
     if methods:
         candidates.append(_taxonomy_plan(topic, methods, kb))
 
-    comparative = _find_section(sections, ["comparative", "comparison", "analysis"])
+    applications = _find_section(sections, ["application", "domain", "robot", "control", "game"])
+    if applications:
+        candidates.append(_application_plan(topic, applications, kb))
+
+    comparative = _find_section(sections, ["comparative", "comparison", "analysis", "evaluation", "benchmark"])
     if comparative:
         candidates.append(_comparison_plan(topic, comparative, kb))
 
@@ -230,6 +234,21 @@ def _comparison_plan(topic: str, section: SurveySection, kb: LiteratureKB) -> Fi
         render_mode="svg",
         source_evidence_ids=evidence_ids,
         filename="figure_000_comparison_matrix.svg",
+        prompt=_clean(section.body, 2200),
+    )
+
+
+def _application_plan(topic: str, section: SurveySection, kb: LiteratureKB) -> FigurePlan:
+    evidence_ids = _source_ids(section)
+    return FigurePlan(
+        figure_id="F000",
+        title=f"{topic} Application Map",
+        caption=f"Application contexts and deployment settings discussed in '{section.title}'.",
+        target_heading=section.title,
+        figure_type="application_map",
+        render_mode="svg",
+        source_evidence_ids=evidence_ids,
+        filename="figure_000_application_map.svg",
         prompt=_clean(section.body, 2200),
     )
 

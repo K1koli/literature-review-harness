@@ -56,6 +56,7 @@ class OpenAIImageGenerator:
         base_url: str = "https://api.openai.com/v1",
         endpoint_path: str = "/images/generations",
         model: str = "gpt-image-1",
+        models: list[str] | None = None,
         size: str = "1536x1024",
         quality: str = "low",
         timeout_seconds: int = 180,
@@ -64,6 +65,7 @@ class OpenAIImageGenerator:
         self.base_url = base_url.rstrip("/")
         self.endpoint_path = endpoint_path
         self.model = model
+        self.models = _dedupe(models or [model])
         self.size = size
         self.quality = quality
         self.timeout_seconds = timeout_seconds
@@ -73,10 +75,18 @@ class OpenAIImageGenerator:
             raise ValueError("OpenAI image API key is required")
 
         output_dir.mkdir(parents=True, exist_ok=True)
-        image_path = output_dir / spec.filename
+        errors: list[str] = []
+        for model in self.models:
+            try:
+                return await self._generate_with_model(spec, output_dir, model)
+            except Exception as exc:
+                errors.append(f"{model}: {exc}")
+        raise ValueError("All image models failed: " + " | ".join(errors))
 
+    async def _generate_with_model(self, spec: FigurePlan, output_dir: Path, model: str) -> GeneratedImage:
+        image_path = output_dir / spec.filename
         payload: dict[str, Any] = {
-            "model": self.model,
+            "model": model,
             "prompt": spec.prompt,
             "size": self.size,
             "n": 1,
@@ -118,7 +128,7 @@ class OpenAIImageGenerator:
             caption=spec.caption,
             prompt=spec.prompt,
             path=str(image_path),
-            model=self.model,
+            model=model,
             size=self.size,
             quality=self.quality,
             render_mode=getattr(spec, "render_mode", "image"),
@@ -143,3 +153,12 @@ class OpenAIImageGenerator:
         if not endpoint_path.startswith("/"):
             endpoint_path = "/" + endpoint_path
         return f"{self.base_url}{endpoint_path}"
+
+
+def _dedupe(values: list[str]) -> list[str]:
+    result: list[str] = []
+    for value in values:
+        value = value.strip()
+        if value and value not in result:
+            result.append(value)
+    return result or ["gpt-image-1"]

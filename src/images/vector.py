@@ -17,6 +17,8 @@ def render_svg_figure(plan: FigurePlan, kb: LiteratureKB, output_dir: Path) -> G
         svg = _research_agenda_svg(plan, kb)
     elif plan.figure_type == "comparison_matrix":
         svg = _comparison_matrix_svg(plan, kb)
+    elif plan.figure_type == "application_map":
+        svg = _application_map_svg(plan, kb)
     else:
         svg = _taxonomy_svg(plan, kb)
     path.write_text(svg, encoding="utf-8")
@@ -98,6 +100,26 @@ def _research_agenda_svg(plan: FigurePlan, kb: LiteratureKB) -> str:
         parts.extend(_wrapped_text(item, x + 90, y + 62, 220, 24, "#16233a", weight="700"))
         parts.extend(_wrapped_text(_agenda_hint(item), x + 42, y + 120, 280, 15, "#46566b"))
     parts.append(_source_footer(plan.source_evidence_ids, y=860))
+    return _svg_shell(plan.title, "\n".join(parts))
+
+
+def _application_map_svg(plan: FigurePlan, kb: LiteratureKB) -> str:
+    evidence_text = _plan_text(plan, kb)
+    domains = _keyword_items(evidence_text, _DOMAIN_TERMS, fallback=["Robotics", "Games", "Control", "Simulation", "Agents", "Deployment"])[:6]
+    parts = [_text(plan.title, 768, 78, 32, "#102a4c", anchor="middle", weight="800")]
+    center_x, center_y = 768, 480
+    parts.append(_rect(center_x - 150, center_y - 70, 300, 140, "#173b68", "#173b68", radius=28))
+    parts.append(_text("World Model", center_x, center_y - 10, 31, "#ffffff", anchor="middle", weight="800"))
+    parts.append(_text("learned environment", center_x, center_y + 32, 18, "#dcecff", anchor="middle", weight="600"))
+    positions = [(250, 220), (690, 190), (1130, 220), (250, 700), (690, 735), (1130, 700)]
+    fills = ["#e8f3ff", "#edf8f0", "#fff6df", "#f7eefb", "#fff0f0", "#edf5f7"]
+    for index, domain in enumerate(domains):
+        x, y = positions[index]
+        parts.append(_line(center_x, center_y, x + 110, y + 58, "#9bb7e0"))
+        parts.append(_rect(x, y, 220, 116, fills[index], "#d9e2ec", radius=24))
+        parts.append(_text(domain, x + 110, y + 52, 22, "#16233a", anchor="middle", weight="800"))
+        parts.append(_text("evidence-backed", x + 110, y + 84, 15, "#536579", anchor="middle", weight="600"))
+    parts.append(_source_footer(plan.source_evidence_ids, y=910))
     return _svg_shell(plan.title, "\n".join(parts))
 
 
@@ -258,6 +280,10 @@ def _svg_shell(title: str, body: str) -> str:
 
 def _rect(x: float, y: float, w: float, h: float, fill: str, stroke: str, radius: int = 18) -> str:
     return f'<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="{radius}" fill="{fill}" stroke="{stroke}" stroke-width="2"/>'
+
+
+def _line(x1: float, y1: float, x2: float, y2: float, color: str) -> str:
+    return f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{color}" stroke-width="4" stroke-linecap="round"/>'
 
 
 def _text(text: str, x: float, y: float, size: int, color: str, anchor: str = "start", weight: str = "500") -> str:

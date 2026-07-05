@@ -1,6 +1,6 @@
 import os
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 try:
     from dotenv import load_dotenv
@@ -51,6 +51,22 @@ def _value(value_or_env: str, default_env: str, default_value: str = "") -> str:
     return default_value
 
 
+def _list_value(config_value: object, env_name: str, default: list[str]) -> list[str]:
+    env_value = os.environ.get(env_name)
+    raw: object = env_value if env_value is not None else config_value
+    if isinstance(raw, list):
+        values = [str(item).strip() for item in raw]
+    elif isinstance(raw, str) and raw.strip():
+        values = [item.strip() for item in raw.split(",")]
+    else:
+        values = list(default)
+    deduped: list[str] = []
+    for value in values:
+        if value and value not in deduped:
+            deduped.append(value)
+    return deduped or list(default)
+
+
 def _chat_base_url(url: str) -> str:
     clean = (url or "").rstrip("/")
     suffix = "/chat/completions"
@@ -69,6 +85,7 @@ class Config:
     openai_image_base_url: str = "https://api.openai.com/v1"
     openai_image_endpoint_path: str = "/images/generations"
     openai_image_model: str = "gpt-image-1"
+    openai_image_models: list[str] = field(default_factory=lambda: ["gpt-image-1"])
     image_generation_enabled: bool = False
     image_generation_size: str = "1536x1024"
     image_generation_quality: str = "low"
@@ -96,6 +113,8 @@ class Config:
                 "https://chat.intern-ai.org.cn/api/v1",
             )
         )
+        image_model = os.getenv("OPENAI_IMAGE_MODEL", _cfg(file_cfg, "image_generation", "model", "gpt-image-1"))
+        image_models = _list_value(image_cfg.get("models", image_model), "OPENAI_IMAGE_MODELS", [image_model])
         return cls(
             intern_api_base=intern_base,
             intern_api_key=_secret(_cfg(file_cfg, "llm", "api_key_env", "INTERN_API_KEY"), "INTERN_API_KEY") or os.getenv("API_KEY", ""),
@@ -111,7 +130,8 @@ class Config:
                 "OPENAI_IMAGE_ENDPOINT_PATH",
                 _cfg(file_cfg, "image_generation", "endpoint_path", "/images/generations"),
             ),
-            openai_image_model=os.getenv("OPENAI_IMAGE_MODEL", _cfg(file_cfg, "image_generation", "model", "gpt-image-1")),
+            openai_image_model=image_models[0],
+            openai_image_models=image_models,
             image_generation_enabled=os.getenv("IMAGE_GENERATION_ENABLED", image_enabled_default).lower() in {"1", "true", "yes"},
             image_generation_size=os.getenv("IMAGE_GENERATION_SIZE", _cfg(file_cfg, "image_generation", "size", "1536x1024")),
             image_generation_quality=os.getenv("IMAGE_GENERATION_QUALITY", _cfg(file_cfg, "image_generation", "quality", "low")),
