@@ -19,6 +19,7 @@ def _markdown_to_html(markdown: str) -> str:
     paragraph: list[str] = []
     list_items: list[str] = []
     ordered_items: list[str] = []
+    reference_items: list[tuple[int, str]] = []
     table_rows: list[list[str]] = []
     in_figure = False
 
@@ -43,6 +44,14 @@ def _markdown_to_html(markdown: str) -> str:
             html_lines.extend(f"<li>{_inline(item)}</li>" for item in ordered_items)
             html_lines.append("</ol>")
             ordered_items = []
+
+    def flush_references() -> None:
+        nonlocal reference_items
+        if reference_items:
+            html_lines.append('<ol class="references">')
+            html_lines.extend(f'<li value="{number}">{_inline(item)}</li>' for number, item in reference_items)
+            html_lines.append("</ol>")
+            reference_items = []
 
     def flush_table() -> None:
         nonlocal table_rows
@@ -75,12 +84,14 @@ def _markdown_to_html(markdown: str) -> str:
             flush_paragraph()
             flush_list()
             flush_ordered_list()
+            flush_references()
             flush_table()
             continue
         if line.startswith("<figure"):
             flush_paragraph()
             flush_list()
             flush_ordered_list()
+            flush_references()
             flush_table()
             in_figure = True
             html_lines.append(line)
@@ -89,6 +100,7 @@ def _markdown_to_html(markdown: str) -> str:
             flush_paragraph()
             flush_list()
             flush_ordered_list()
+            flush_references()
             flush_table()
             in_figure = False
             html_lines.append(line)
@@ -97,6 +109,7 @@ def _markdown_to_html(markdown: str) -> str:
             flush_paragraph()
             flush_list()
             flush_ordered_list()
+            flush_references()
             flush_table()
             html_lines.append(_inline_raw_html(line))
             continue
@@ -104,6 +117,7 @@ def _markdown_to_html(markdown: str) -> str:
             flush_paragraph()
             flush_list()
             flush_ordered_list()
+            flush_references()
             table_rows.append(_parse_table_row(line))
             continue
         heading = re.match(r"^(#{1,6})\s+(.+)$", line)
@@ -111,6 +125,7 @@ def _markdown_to_html(markdown: str) -> str:
             flush_paragraph()
             flush_list()
             flush_ordered_list()
+            flush_references()
             flush_table()
             level = len(heading.group(1))
             html_lines.append(f"<h{level}>{_inline(heading.group(2).strip())}</h{level}>")
@@ -119,6 +134,7 @@ def _markdown_to_html(markdown: str) -> str:
             flush_paragraph()
             flush_list()
             flush_ordered_list()
+            flush_references()
             flush_table()
             html_lines.append("<hr/>")
             continue
@@ -127,6 +143,7 @@ def _markdown_to_html(markdown: str) -> str:
             flush_paragraph()
             flush_list()
             flush_ordered_list()
+            flush_references()
             flush_table()
             alt = html.escape(image.group(1))
             src = html.escape(image.group(2))
@@ -135,13 +152,23 @@ def _markdown_to_html(markdown: str) -> str:
         if line.startswith("- "):
             flush_paragraph()
             flush_ordered_list()
+            flush_references()
             flush_table()
             list_items.append(line[2:].strip())
+            continue
+        reference = re.match(r"^\[(\d+)\]\s+(.+)$", line)
+        if reference:
+            flush_paragraph()
+            flush_list()
+            flush_ordered_list()
+            flush_table()
+            reference_items.append((int(reference.group(1)), reference.group(2).strip()))
             continue
         ordered = re.match(r"^\d+\.\s+(.+)$", line)
         if ordered:
             flush_paragraph()
             flush_list()
+            flush_references()
             flush_table()
             ordered_items.append(ordered.group(1).strip())
             continue
@@ -150,6 +177,7 @@ def _markdown_to_html(markdown: str) -> str:
     flush_paragraph()
     flush_list()
     flush_ordered_list()
+    flush_references()
     flush_table()
     return "\n".join(html_lines)
 
@@ -272,6 +300,15 @@ def _page(title: str, body: str) -> str:
     }}
     ol {{
       padding-left: 24px;
+    }}
+    ol.references {{
+      padding-left: 30px;
+    }}
+    ol.references li {{
+      margin: 0 0 10px;
+      padding-left: 4px;
+      font-size: 14.5px;
+      line-height: 1.55;
     }}
     table {{
       width: 100%;

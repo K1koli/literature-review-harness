@@ -35,6 +35,8 @@ _REVIEW_PROMPTS = {
         "- If many evidence records are available, citations should be distributed across the survey rather than concentrated in a few papers\n"
         "- Markdown table rows with factual claims must include evidence ids in a Sources column\n"
         "- References section must list papers that match the cited evidence IDs\n"
+        "- Figure captions should be descriptive only; no evidence ids, source lists, or API traces inside captions\n"
+        "- The draft should not include XML-like audit blocks such as <references> or <evidence>\n"
         "- No mention of raw doc_ids, offsets, or API traces in the prose\n"
         "- No pseudo-citations such as [Evidence Gap], [citation needed], or unsupported placeholders\n\n"
         "Return a JSON object:\n"
@@ -49,6 +51,7 @@ _REVIEW_PROMPTS = {
         "- Does the abstract summarize the review lens and findings, not just the topic?\n"
         "- Does the conclusion synthesize takeaways rather than repeat the introduction?\n"
         "- Are headings, tables, figures, and references formatted cleanly?\n\n"
+        "- Does surrounding prose refer to important figures, instead of overloading captions with citations?\n\n"
         "Return a JSON object:\n"
         '{"passed": true/false, "issues": ["specific issue 1", ...], "suggestions": ["fix 1", ...]}\n\n'
         "Be specific about structural problems."

@@ -39,6 +39,7 @@ from src.utils.config import Config
 from src.utils.runs import create_run_paths, sync_latest_compat_outputs, write_latest_pointer
 from src.validation.citations import CitationVerifier
 from src.validation.repair import repair_missing_evidence_citations
+from src.validation.references import format_numbered_references
 from src.validation.multi_agent import MultiAgentReviewer
 from src.skill_system.manager import SkillManager
 from src.skill_system.router import SkillRouter
@@ -142,7 +143,8 @@ async def main():
         "If its survey_design.evidence_needs show missing support, make a small number of targeted "
         "search_literature/read_context/parsed-paper calls before writing; do not repeatedly re-run planning.\n"
         "7. Then write the complete survey directly in your assistant response. Every substantive paragraph must cite "
-        "existing evidence ids such as [P001-E01]. Do not stop at an outline, notes, or an evidence summary."
+        "existing evidence ids such as [P001-E01]. Do not stop at an outline, notes, or an evidence summary. "
+        "Keep figure captions descriptive only, and do not include XML-like audit blocks such as <references>."
     )
 
     try:
@@ -215,6 +217,8 @@ async def main():
         figure_plan_path=run_paths.figure_plan,
         skill_guidance=figure_skill_guidance,
     )
+    formatted_result = format_numbered_references(survey_path.read_text(encoding="utf-8"), kb)
+    survey_path.write_text(formatted_result, encoding="utf-8")
     if skill_trace is not None:
         skill_trace.save()
     html_path = run_paths.survey_html
@@ -241,7 +245,7 @@ async def main():
         print(f"Image generation skipped: {image_result.skipped_reason}")
     if skill_trace is not None:
         print(f"Skill trace saved to {skill_trace.output_path}")
-    print(f"Total characters: {len(result)}")
+    print(f"Total characters: {len(formatted_result)}")
 
 
 if __name__ == "__main__":

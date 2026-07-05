@@ -64,11 +64,11 @@ def plan_survey_figures(
 
     methods = _find_section(sections, ["taxonomy", "method", "architecture", "approach", "paradigm"])
     if methods:
-        candidates.append(_taxonomy_plan(topic, methods, kb))
+        candidates.append(_taxonomy_plan(topic, methods, kb, skill_guidance))
 
     applications = _find_section(sections, ["application", "domain", "robot", "control", "game"])
     if applications:
-        candidates.append(_application_plan(topic, applications, kb))
+        candidates.append(_application_plan(topic, applications, kb, skill_guidance))
 
     comparative = _find_section(sections, ["comparative", "comparison", "analysis", "evaluation", "benchmark"])
     if comparative:
@@ -76,7 +76,7 @@ def plan_survey_figures(
 
     future = _find_section(sections, ["future", "open challenge", "challenge", "agenda"])
     if future:
-        candidates.append(_agenda_plan(topic, future, kb))
+        candidates.append(_agenda_plan(topic, future, kb, skill_guidance))
 
     deduped: list[FigurePlan] = []
     seen_headings: set[str] = set()
@@ -171,44 +171,38 @@ def _clean(value: str, max_chars: int = 2200) -> str:
 
 def _conceptual_overview_plan(topic: str, section: SurveySection, kb: LiteratureKB, skill_guidance: str) -> FigurePlan:
     evidence_ids = _source_ids(section)
-    cues = ", ".join(_content_cues(section))
-    prompt = f"""
-Create a polished academic survey figure for {topic}.
-
-Target section: {section.title}
-Content cues distilled from the evidence-backed section:
-{cues}
-
-Source support: {len(evidence_ids)} cited evidence records. Source details remain in the caption, not in the image prompt.
-
-Design constraints:
-- Use a clean conference-paper visual style, like a vector diagram rendered as a raster image.
-- Show the review's organizing logic with blocks, arrows, layers, or clusters.
-- Prefer a taxonomy, lifecycle, or relationship diagram over decorative illustration.
-- Use at most 8 short labels, each under 4 words.
-- Prefer icons, shapes, arrows, and spatial grouping over written text.
-- Avoid people, faces, vehicles, medical scenes, brands, logos, screenshots, code, equations, citation ids, author names, and paper titles.
-- Do not render exact years, paper titles, author names, citation ids, DOI strings, equations, or numeric benchmark values inside the image.
-- Factual claims and source attribution remain in the caption and survey text, not inside the image.
-- Leave enough whitespace for the figure to be readable at article width.
-
-Figure-skill guidance:
-{_clean(_plain_skill_guidance(skill_guidance), 420)}
-""".strip()
     return FigurePlan(
         figure_id="F000",
-        title=f"{topic} Conceptual Overview",
-        caption=f"Conceptual overview for the section '{section.title}'.",
+        title=f"{topic} Literature Taxonomy Map",
+        caption=f"Visual map of the review's literature organization introduced in '{section.title}'.",
         target_heading=section.title,
-        figure_type="conceptual_overview",
+        figure_type="literature_taxonomy_map",
         render_mode="image",
         source_evidence_ids=evidence_ids,
-        filename="figure_000_conceptual_overview.png",
-        prompt=prompt,
+        filename="figure_000_literature_taxonomy_map.png",
+        prompt=_image_prompt(
+            topic=topic,
+            section=section,
+            evidence_count=len(evidence_ids),
+            diagram_goal=(
+                "Create the main survey figure: a visually polished map that groups the reviewed literature "
+                "into coherent families, subfamilies, application areas, and open-problem branches."
+            ),
+            visual_metaphor=(
+                "Use an elegant technical tree, radial map, metro map, or layered ecosystem diagram. "
+                "Small abstract icons are encouraged when they clarify categories."
+            ),
+            logic_requirements=[
+                "The hierarchy must be clear: root topic -> major literature families -> representative subtopics.",
+                "Use arrows or branches only where they show a real progression or dependency.",
+                "Make the figure useful as a reader's navigation map for the whole survey.",
+            ],
+            skill_guidance=skill_guidance,
+        ),
     )
 
 
-def _taxonomy_plan(topic: str, section: SurveySection, kb: LiteratureKB) -> FigurePlan:
+def _taxonomy_plan(topic: str, section: SurveySection, kb: LiteratureKB, skill_guidance: str) -> FigurePlan:
     evidence_ids = _source_ids(section)
     return FigurePlan(
         figure_id="F000",
@@ -216,10 +210,22 @@ def _taxonomy_plan(topic: str, section: SurveySection, kb: LiteratureKB) -> Figu
         caption=f"Evidence-grounded taxonomy of method families discussed in '{section.title}'.",
         target_heading=section.title,
         figure_type="method_taxonomy",
-        render_mode="svg",
+        render_mode="image",
         source_evidence_ids=evidence_ids,
-        filename="figure_000_method_taxonomy.svg",
-        prompt=_clean(section.body, 2200),
+        filename="figure_000_method_taxonomy.png",
+        prompt=_image_prompt(
+            topic=topic,
+            section=section,
+            evidence_count=len(evidence_ids),
+            diagram_goal="Create a method-family taxonomy figure for this survey section.",
+            visual_metaphor="Use grouped panels, nested cards, or a clean branching tree with tasteful academic icons.",
+            logic_requirements=[
+                "Separate method families visually and show how they differ by representation, objective, or usage.",
+                "Use consistent visual grammar: one shape type for families, another for subfamilies.",
+                "Do not make a generic decorative poster; the grouping logic must be readable.",
+            ],
+            skill_guidance=skill_guidance,
+        ),
     )
 
 
@@ -238,7 +244,7 @@ def _comparison_plan(topic: str, section: SurveySection, kb: LiteratureKB) -> Fi
     )
 
 
-def _application_plan(topic: str, section: SurveySection, kb: LiteratureKB) -> FigurePlan:
+def _application_plan(topic: str, section: SurveySection, kb: LiteratureKB, skill_guidance: str) -> FigurePlan:
     evidence_ids = _source_ids(section)
     return FigurePlan(
         figure_id="F000",
@@ -246,14 +252,26 @@ def _application_plan(topic: str, section: SurveySection, kb: LiteratureKB) -> F
         caption=f"Application contexts and deployment settings discussed in '{section.title}'.",
         target_heading=section.title,
         figure_type="application_map",
-        render_mode="svg",
+        render_mode="image",
         source_evidence_ids=evidence_ids,
-        filename="figure_000_application_map.svg",
-        prompt=_clean(section.body, 2200),
+        filename="figure_000_application_map.png",
+        prompt=_image_prompt(
+            topic=topic,
+            section=section,
+            evidence_count=len(evidence_ids),
+            diagram_goal="Create an application landscape figure for this survey section.",
+            visual_metaphor="Use a hub-and-spoke map, layered deployment diagram, or domain landscape with small abstract icons.",
+            logic_requirements=[
+                "Group application domains by role or deployment setting.",
+                "Show how methods connect to applications without implying unsupported quantitative rankings.",
+                "If arrows are used, their direction must indicate data flow, deployment flow, or conceptual dependency.",
+            ],
+            skill_guidance=skill_guidance,
+        ),
     )
 
 
-def _agenda_plan(topic: str, section: SurveySection, kb: LiteratureKB) -> FigurePlan:
+def _agenda_plan(topic: str, section: SurveySection, kb: LiteratureKB, skill_guidance: str) -> FigurePlan:
     evidence_ids = _source_ids(section)
     return FigurePlan(
         figure_id="F000",
@@ -261,11 +279,64 @@ def _agenda_plan(topic: str, section: SurveySection, kb: LiteratureKB) -> Figure
         caption=f"Open challenges and research directions extracted from '{section.title}'.",
         target_heading=section.title,
         figure_type="research_agenda",
-        render_mode="svg",
+        render_mode="image",
         source_evidence_ids=evidence_ids,
-        filename="figure_000_research_agenda.svg",
-        prompt=_clean(section.body, 2200),
+        filename="figure_000_research_agenda.png",
+        prompt=_image_prompt(
+            topic=topic,
+            section=section,
+            evidence_count=len(evidence_ids),
+            diagram_goal="Create a future-research roadmap figure for this survey section.",
+            visual_metaphor="Use a roadmap, layered funnel, or branching challenge-to-opportunity diagram.",
+            logic_requirements=[
+                "Show limitations leading to research opportunities in a clear left-to-right or bottom-to-top flow.",
+                "Use arrows only to express problem-to-direction logic.",
+                "Avoid unsupported predictions, numeric forecasts, or hype language.",
+            ],
+            skill_guidance=skill_guidance,
+        ),
     )
+
+
+def _image_prompt(
+    *,
+    topic: str,
+    section: SurveySection,
+    evidence_count: int,
+    diagram_goal: str,
+    visual_metaphor: str,
+    logic_requirements: list[str],
+    skill_guidance: str,
+) -> str:
+    cues = ", ".join(_content_cues(section))
+    logic = "\n".join(f"- {item}" for item in logic_requirements)
+    return f"""
+Create a publication-quality academic diagram for a literature survey.
+
+Topic: {topic}
+Target section: {section.title}
+Goal: {diagram_goal}
+Evidence-backed content cues: {cues}
+Source support: {evidence_count} cited evidence records. Source details stay in the caption, not inside the image.
+
+Visual direction:
+- {visual_metaphor}
+- Render as a clean raster image with the precision of a vector infographic.
+- Use a restrained but attractive palette, crisp lines, generous whitespace, and balanced composition.
+- Use at most 10 short labels, each under 4 words.
+- Prefer icons, shapes, arrows, grouping, and hierarchy over dense text.
+
+Logical requirements:
+{logic}
+
+Safety and citation constraints:
+- Do not include people, faces, vehicles, medical scenes, brands, logos, screenshots, source code, equations, citation ids, author names, paper titles, DOI strings, or exact benchmark numbers.
+- Do not claim exact facts inside the image; factual support remains in the survey text and caption.
+- The result must look like a figure from a serious ML/AI survey paper, not a marketing poster.
+
+Figure-skill guidance:
+{_clean(_plain_skill_guidance(skill_guidance), 420)}
+""".strip()
 
 
 def _plain_skill_guidance(text: str) -> str:

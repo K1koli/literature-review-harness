@@ -179,8 +179,6 @@ def _find_heading_insert_index(lines: list[str], target_heading: str) -> int:
 
 def _figure_markdown_block(survey_path: Path, figure: GeneratedImage) -> str:
     relative_path = os.path.relpath(Path(figure.path), survey_path.parent)
-    sources = ", ".join(figure.source_evidence_ids or [])
-    source_sentence = f" Sources: {sources}." if sources else ""
     return "\n".join(
         [
             "",
@@ -188,12 +186,18 @@ def _figure_markdown_block(survey_path: Path, figure: GeneratedImage) -> str:
             "",
             f"![{figure.title}]({relative_path})",
             "",
-            f"<figcaption><strong>{figure.figure_id}. {figure.title}.</strong> {figure.caption}{source_sentence}</figcaption>",
+            f"<figcaption><strong>{figure.figure_id}. {figure.title}.</strong> {figure.caption}</figcaption>",
             "",
             "</figure>",
             "",
+            _figure_reference_sentence(figure),
+            "",
         ]
     )
+
+
+def _figure_reference_sentence(figure: GeneratedImage) -> str:
+    return f"Figure {figure.figure_id} summarizes the visual organization of this section."
 
 
 def _is_policy_retryable(exc: Exception) -> bool:
