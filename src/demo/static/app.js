@@ -185,7 +185,13 @@ function formatTraceEvent(event) {
     return `<strong>${escapeHtml(event.name || "Verifier")}</strong> ${status} <code>${escapeHtml(JSON.stringify(event.report || {}))}</code>`;
   }
   if (type === "image_generation_finished") {
-    return `<strong>Images</strong> ${event.enabled ? `${event.generated || 0} generated` : "skipped"}`;
+    if (!event.enabled) {
+      const reason = event.skipped_reason ? ` <code>${escapeHtml(event.skipped_reason)}</code>` : "";
+      return `<strong>Images</strong> skipped${reason}`;
+    }
+    const errors = Array.isArray(event.errors) ? event.errors : [];
+    const errorText = errors.length ? `, ${errors.length} issue(s) <code>${escapeHtml(shorten(JSON.stringify(errors), 180))}</code>` : "";
+    return `<strong>Images</strong> ${event.generated || 0} generated${errorText}`;
   }
   if (type === "artifacts_ready") {
     return `<strong>Artifacts ready</strong> ${escapeHtml(JSON.stringify(event.summary || {}))}`;

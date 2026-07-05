@@ -133,8 +133,14 @@ class Config:
             openai_image_model=image_models[0],
             openai_image_models=image_models,
             image_generation_enabled=os.getenv("IMAGE_GENERATION_ENABLED", image_enabled_default).lower() in {"1", "true", "yes"},
-            image_generation_size=os.getenv("IMAGE_GENERATION_SIZE", _cfg(file_cfg, "image_generation", "size", "1536x1024")),
-            image_generation_quality=os.getenv("IMAGE_GENERATION_QUALITY", _cfg(file_cfg, "image_generation", "quality", "low")),
+            image_generation_size=os.getenv(
+                "IMAGE_GENERATION_SIZE",
+                os.getenv("OPENAI_IMAGE_SIZE", _cfg(file_cfg, "image_generation", "size", "1536x1024")),
+            ),
+            image_generation_quality=os.getenv(
+                "IMAGE_GENERATION_QUALITY",
+                os.getenv("OPENAI_IMAGE_QUALITY", _cfg(file_cfg, "image_generation", "quality", "low")),
+            ),
             image_generation_count=int(os.getenv("IMAGE_GENERATION_COUNT", str(image_cfg.get("count", "1")))),
             image_generation_timeout=int(os.getenv("IMAGE_GENERATION_TIMEOUT", str(image_cfg.get("timeout_seconds", "180")))),
             mineru_enabled=os.getenv("MINERU_ENABLED", mineru_enabled_default).lower() in {"1", "true", "yes"},

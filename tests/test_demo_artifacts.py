@@ -128,6 +128,8 @@ class DemoArtifactsTest(unittest.TestCase):
         self.assertNotIn("样例", index_html)
         self.assertNotIn("/api/reviews/sample", app_js)
         self.assertIn('els.topic.value = "";', app_js)
+        self.assertIn("event.skipped_reason", app_js)
+        self.assertIn("issue(s)", app_js)
 
 
 if __name__ == "__main__":
