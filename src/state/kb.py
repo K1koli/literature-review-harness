@@ -37,12 +37,22 @@ class EvidenceRecord:
     year: int | None = None
 
 
+@dataclass
+class ParsedDocument:
+    paper_id: str
+    title: str
+    text: str
+    source: str
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+
 class LiteratureKB:
-    """In-memory evidence KB shared across agent tools."""
+    """Runtime evidence KB shared across agent tools."""
 
     def __init__(self) -> None:
         self.papers: list[PaperRecord] = []
         self.evidence: list[EvidenceRecord] = []
+        self.parsed_documents: dict[str, ParsedDocument] = {}
         self._paper_by_key: dict[str, PaperRecord] = {}
         self._paper_by_id: dict[str, PaperRecord] = {}
         self._paper_by_doc_id: dict[str, PaperRecord] = {}
@@ -136,6 +146,44 @@ class LiteratureKB:
     def get_evidence(self, evidence_id: str) -> EvidenceRecord | None:
         return next((item for item in self.evidence if item.evidence_id == evidence_id), None)
 
+    def get_paper(self, paper_id: str) -> PaperRecord | None:
+        return self._paper_by_id.get(paper_id)
+
+    def set_parsed_document(
+        self,
+        paper: PaperRecord,
+        *,
+        text: str,
+        source: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        clean_text = re.sub(r"\n{3,}", "\n\n", text or "").strip()
+        if not clean_text:
+            return
+        self.parsed_documents[paper.paper_id] = ParsedDocument(
+            paper_id=paper.paper_id,
+            title=paper.title,
+            text=clean_text,
+            source=source,
+            metadata=metadata or {},
+        )
+
+    def get_parsed_document(self, paper_id: str) -> ParsedDocument | None:
+        return self.parsed_documents.get(paper_id)
+
+    def parsed_document_summaries(self) -> list[dict[str, Any]]:
+        return [
+            {
+                "paper_id": document.paper_id,
+                "title": document.title,
+                "source": document.source,
+                "characters": len(document.text),
+                "metadata": document.metadata,
+                "preview": document.text[:300],
+            }
+            for document in self.parsed_documents.values()
+        ]
+
     def set_mineru_state(self, paper: PaperRecord, state: dict[str, Any]) -> None:
         paper.mineru.update(state)
 
@@ -143,6 +191,7 @@ class LiteratureKB:
         if max_count <= 0:
             self.papers = []
             self.evidence = []
+            self.parsed_documents = {}
             self._rebuild_indexes()
             return
         if len(self.papers) <= max_count:
@@ -150,6 +199,11 @@ class LiteratureKB:
         kept_ids = {paper.paper_id for paper in self.papers[:max_count]}
         self.papers = self.papers[:max_count]
         self.evidence = [item for item in self.evidence if item.paper_id in kept_ids]
+        self.parsed_documents = {
+            paper_id: document
+            for paper_id, document in self.parsed_documents.items()
+            if paper_id in kept_ids
+        }
         evidence_by_paper: dict[str, list[str]] = {paper.paper_id: [] for paper in self.papers}
         for item in self.evidence:
             evidence_by_paper.setdefault(item.paper_id, []).append(item.evidence_id)
@@ -164,6 +218,7 @@ class LiteratureKB:
         return {
             "papers": [asdict(paper) for paper in self.papers],
             "evidence": [asdict(item) for item in self.evidence],
+            "parsed_documents": self.parsed_document_summaries(),
         }
 
     def to_json(self) -> str:

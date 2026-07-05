@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import tempfile
 import unittest
 from pathlib import Path
 
-from src.skill_system.injection import SkillContextInjector
 from src.skill_system.manager import SkillManager
 from src.skill_system.router import SkillRouter
 from src.skill_system.tools import (
@@ -52,31 +50,6 @@ class SkillSystemTest(unittest.TestCase):
         unloaded = manager.unload()
         self.assertEqual(set(unloaded), set(context.names))
         self.assertEqual(manager.active_names, [])
-
-    def test_injector_adds_skill_context_and_writes_trace(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            trace = SkillTraceRecorder(Path(tmp) / "skill_trace.json")
-            manager = SkillManager(PROJECT_ROOT / "skills")
-            injector = SkillContextInjector(
-                manager,
-                SkillRouter(),
-                trace,
-                phase="literature_review",
-                topic="World Models",
-            )
-
-            messages = [{"role": "system", "content": "base"}, {"role": "user", "content": "write"}]
-            injected, tools = injector(messages, [])
-            injector.unload()
-            trace.save()
-
-            self.assertEqual(tools, [])
-            self.assertEqual(len(injected), len(messages))
-            self.assertIn("Loaded Skill Protocols", injected[0]["content"])
-
-            data = json.loads((Path(tmp) / "skill_trace.json").read_text(encoding="utf-8"))
-            actions = {item["action"] for item in data}
-            self.assertTrue({"discover", "route", "load", "inject", "unload"} <= actions)
 
     def test_skill_tools_expose_progressive_disclosure_steps(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -126,6 +99,53 @@ class SkillSystemTest(unittest.TestCase):
 
             self.assertIn("configured-figure-generation", figure_context.names)
             self.assertIn("Build evidence-grounded figure briefs", figure_context.render())
+
+    def test_configured_skill_paths_outside_skills_are_ignored(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            inside = root / "skills" / "inside-skill"
+            outside = root / "external_skills" / "outside-skill"
+            inside.mkdir(parents=True)
+            outside.mkdir(parents=True)
+            (inside / "SKILL.md").write_text(
+                "---\n"
+                "name: inside-skill\n"
+                "description: Inside skill.\n"
+                "---\n\n"
+                "# Inside Skill\n",
+                encoding="utf-8",
+            )
+            (outside / "SKILL.md").write_text(
+                "---\n"
+                "name: outside-skill\n"
+                "description: Outside skill.\n"
+                "---\n\n"
+                "# Outside Skill\n",
+                encoding="utf-8",
+            )
+            config = root / "configs" / "skills.toml"
+            config.parent.mkdir()
+            config.write_text(
+                '[[skills]]\n'
+                'name = "configured-inside"\n'
+                'path = "skills/inside-skill"\n'
+                'roles = ["survey_writing"]\n'
+                'enabled = true\n\n'
+                '[[skills]]\n'
+                'name = "configured-outside"\n'
+                'path = "external_skills/outside-skill"\n'
+                'roles = ["survey_writing"]\n'
+                'enabled = true\n',
+                encoding="utf-8",
+            )
+
+            manager = SkillManager(root / "skills", external_config=config)
+            names = {meta.name for meta in manager.list()}
+
+            self.assertIn("inside-skill", names)
+            self.assertIn("configured-inside", names)
+            self.assertNotIn("configured-outside", names)
+            self.assertNotIn("outside-skill", names)
 
     def test_router_caps_phase_skill_selection(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

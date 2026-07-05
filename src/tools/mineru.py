@@ -126,7 +126,7 @@ def _safe_zip_json(zip_bytes: bytes) -> dict[str, Any] | None:
         if candidates:
             with archive.open(sorted(candidates)[0]) as handle:
                 content_list = json.loads(handle.read().decode("utf-8"))
-            return {"content_list": content_list}
+            return {"content_list": content_list, "structured_path": sorted(candidates)[0]}
         markdown_candidates = [item for item in archive.namelist() if item.endswith("full.md")]
         if markdown_candidates:
             with archive.open(sorted(markdown_candidates)[0]) as handle:
@@ -175,6 +175,22 @@ def mineru_evidence_chunks(structured: dict[str, Any], *, max_items: int) -> lis
     if buffer and len(chunks) < max_items:
         chunks.append(" ".join(buffer)[:1400])
     return [chunk for chunk in chunks if len(chunk.split()) >= 20]
+
+
+def mineru_document_text(structured: dict[str, Any]) -> str:
+    content = structured.get("content_list") or []
+    parts: list[str] = []
+    for block in content:
+        if not isinstance(block, dict):
+            continue
+        text = re.sub(r"\s+", " ", _block_text(block)).strip()
+        if not text:
+            continue
+        lowered = text.lower()
+        if lowered in {"references", "bibliography"} or "参考文献" in text:
+            break
+        parts.append(text)
+    return "\n\n".join(parts)
 
 
 async def run_mineru_for_kb(kb: LiteratureKB, config: MinerUConfig) -> dict[str, Any]:
@@ -254,6 +270,16 @@ async def run_mineru_for_kb(kb: LiteratureKB, config: MinerUConfig) -> dict[str,
                         zip_bytes = await client.download_zip(str(result_item["full_zip_url"]))
                         structured = _safe_zip_json(zip_bytes)
                         if structured:
+                            kb.set_parsed_document(
+                                paper,
+                                text=mineru_document_text(structured),
+                                source="mineru",
+                                metadata={
+                                    "full_zip_url": result_item["full_zip_url"],
+                                    "structured_path": structured.get("structured_path"),
+                                    "markdown_path": structured.get("markdown_path"),
+                                },
+                            )
                             for chunk in mineru_evidence_chunks(structured, max_items=config.evidence_per_paper):
                                 kb.add_evidence(paper, text=chunk, source="mineru_structured")
                             kb.set_mineru_state(

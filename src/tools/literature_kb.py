@@ -384,3 +384,136 @@ class ReadEvidenceTool:
         if item is None:
             return f"Error: evidence_id {evidence_id} not found."
         return json.dumps(_evidence_summary(item) | {"text": item.text}, ensure_ascii=False, indent=2)
+
+
+class ListParsedPapersTool:
+    name = "list_parsed_papers"
+    description = (
+        "List papers with available MinerU parsed full-text documents. "
+        "Use this when Sciverse snippets are too thin and you need to inspect parsed original text."
+    )
+    parameters = {"type": "object", "properties": {}}
+
+    def __init__(self, kb: LiteratureKB):
+        self.kb = kb
+
+    async def execute(self) -> str:
+        return json.dumps(self.kb.parsed_document_summaries(), ensure_ascii=False, indent=2)
+
+
+class ReadParsedPaperTool:
+    name = "read_parsed_paper"
+    description = (
+        "Read a chunk from a MinerU parsed paper by paper_id and add the returned chunk as citeable evidence. "
+        "Use offsets to continue reading if needed."
+    )
+    parameters = {
+        "type": "object",
+        "properties": {
+            "paper_id": {"type": "string", "description": "Paper id such as P001."},
+            "offset": {"type": "integer", "default": 0, "description": "Character offset in parsed text."},
+            "limit": {"type": "integer", "default": 3000, "description": "Characters to return, capped at 6000."},
+        },
+        "required": ["paper_id"],
+    }
+
+    def __init__(self, kb: LiteratureKB):
+        self.kb = kb
+
+    async def execute(self, paper_id: str, offset: int = 0, limit: int = 3000) -> str:
+        document = self.kb.get_parsed_document(paper_id)
+        paper = self.kb.get_paper(paper_id)
+        if document is None or paper is None:
+            return f"Error: parsed document for {paper_id} not found. Call list_parsed_papers to inspect available documents."
+        start = max(offset, 0)
+        size = min(max(limit, 1), 6000)
+        text = document.text[start : start + size]
+        evidence = self.kb.add_evidence(
+            paper,
+            text=text,
+            source="mineru_parsed_read",
+            offset=start,
+        )
+        return json.dumps(
+            {
+                "paper_id": paper_id,
+                "title": document.title,
+                "offset": start,
+                "limit": size,
+                "more": start + size < len(document.text),
+                "next_offset": start + size if start + size < len(document.text) else None,
+                "evidence": _evidence_summary(evidence) if evidence else None,
+                "text": text,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+
+
+class SearchParsedPaperTool:
+    name = "search_parsed_paper"
+    description = (
+        "Search MinerU parsed paper text by keyword query and add matching snippets as citeable evidence. "
+        "Use this to find original-paper support for specific claims, limitations, evaluations, or methods."
+    )
+    parameters = {
+        "type": "object",
+        "properties": {
+            "paper_id": {"type": "string", "description": "Paper id such as P001."},
+            "query": {"type": "string", "description": "Keyword query to search inside the parsed paper."},
+            "max_hits": {"type": "integer", "default": 3, "description": "Maximum matching snippets."},
+        },
+        "required": ["paper_id", "query"],
+    }
+
+    def __init__(self, kb: LiteratureKB):
+        self.kb = kb
+
+    async def execute(self, paper_id: str, query: str, max_hits: int = 3) -> str:
+        document = self.kb.get_parsed_document(paper_id)
+        paper = self.kb.get_paper(paper_id)
+        if document is None or paper is None:
+            return f"Error: parsed document for {paper_id} not found. Call list_parsed_papers to inspect available documents."
+        terms = [term for term in re.findall(r"[A-Za-z0-9][A-Za-z0-9_-]{2,}", query.lower()) if len(term) >= 3]
+        if not terms:
+            return "Error: query must contain at least one searchable term."
+        matches: list[dict[str, Any]] = []
+        lowered = document.text.lower()
+        seen_offsets: set[int] = set()
+        for term in terms:
+            start = 0
+            while len(matches) < max(1, min(max_hits, 8)):
+                index = lowered.find(term, start)
+                if index < 0:
+                    break
+                snippet_start = max(index - 700, 0)
+                if any(abs(snippet_start - existing) < 300 for existing in seen_offsets):
+                    start = index + len(term)
+                    continue
+                seen_offsets.add(snippet_start)
+                snippet = document.text[snippet_start : snippet_start + 1400]
+                evidence = self.kb.add_evidence(
+                    paper,
+                    text=snippet,
+                    source="mineru_parsed_search",
+                    offset=snippet_start,
+                )
+                matches.append(
+                    {
+                        "term": term,
+                        "offset": snippet_start,
+                        "evidence": _evidence_summary(evidence) if evidence else None,
+                        "text": snippet,
+                    }
+                )
+                start = index + len(term)
+        return json.dumps(
+            {
+                "paper_id": paper_id,
+                "title": document.title,
+                "query": query,
+                "matches": matches,
+            },
+            ensure_ascii=False,
+            indent=2,
+        )

@@ -152,7 +152,6 @@ def _content_cues(section: SurveySection, *, max_items: int = 8) -> list[str]:
         "robotics",
         "autonomous agents",
         "evaluation",
-        "safety",
         "representation learning",
         "world model",
     ]
@@ -170,27 +169,27 @@ def _conceptual_overview_plan(topic: str, section: SurveySection, kb: Literature
     evidence_ids = _source_ids(section)
     cues = ", ".join(_content_cues(section))
     prompt = f"""
-Create a polished academic conceptual overview figure for a survey on {topic}.
+Create a polished academic survey figure for {topic}.
 
 Target section: {section.title}
 Content cues distilled from the evidence-backed section:
 {cues}
 
-Evidence-backed source papers:
-{_paper_context(kb, evidence_ids)}
+Source support: {len(evidence_ids)} cited evidence records. Source details remain in the caption, not in the image prompt.
 
 Design constraints:
-- Use a clean conference-paper visual style, like a vector infographic rendered as a raster image.
-- Show conceptual relationships with blocks, arrows, and clusters: observations -> latent world model -> imagined futures -> planning/evaluation.
+- Use a clean conference-paper visual style, like a vector diagram rendered as a raster image.
+- Show the review's organizing logic with blocks, arrows, layers, or clusters.
+- Prefer a taxonomy, lifecycle, or relationship diagram over decorative illustration.
 - Use at most 8 short labels, each under 4 words.
 - Prefer icons, shapes, arrows, and spatial grouping over written text.
 - Avoid people, faces, vehicles, medical scenes, brands, logos, screenshots, code, equations, citation ids, author names, and paper titles.
 - Do not render exact years, paper titles, author names, citation ids, DOI strings, equations, or numeric benchmark values inside the image.
-- Factual claims remain in the caption and survey text, not inside the raster image.
+- Factual claims and source attribution remain in the caption and survey text, not inside the image.
 - Leave enough whitespace for the figure to be readable at article width.
 
 Figure-skill guidance:
-{_clean(skill_guidance, 600)}
+{_clean(_plain_skill_guidance(skill_guidance), 420)}
 """.strip()
     return FigurePlan(
         figure_id="F000",
@@ -248,3 +247,23 @@ def _agenda_plan(topic: str, section: SurveySection, kb: LiteratureKB) -> Figure
         filename="figure_000_research_agenda.svg",
         prompt=_clean(section.body, 2200),
     )
+
+
+def _plain_skill_guidance(text: str) -> str:
+    if not text:
+        return ""
+    text = re.sub(r"<!--.*?-->", " ", text, flags=re.DOTALL)
+    text = re.sub(r"```.*?```", " ", text, flags=re.DOTALL)
+    text = re.sub(r"`[^`]+`", " ", text)
+    text = re.sub(r"/\S+", " ", text)
+    lines = []
+    for line in text.splitlines():
+        stripped = line.strip(" #-")
+        if not stripped:
+            continue
+        if any(token in stripped.lower() for token in ["script", "bash", "python", "path", "input"]):
+            continue
+        lines.append(stripped)
+        if len(lines) >= 4:
+            break
+    return " ".join(lines)

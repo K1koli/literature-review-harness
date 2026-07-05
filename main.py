@@ -25,17 +25,20 @@ from src.state.kb import LiteratureKB
 from src.tools.literature_kb import (
     BuildLiteratureKBTool,
     ListEvidenceTool,
+    ListParsedPapersTool,
     ReadContextTool,
     ReadEvidenceTool,
+    ReadParsedPaperTool,
     SearchLiteratureTool,
+    SearchParsedPaperTool,
 )
 from src.tools.mineru import MinerUConfig, MINERU_FAST_PAGE_RANGES
 from src.tools.registry import ToolRegistry
+from src.tools.survey_context import PrepareSurveyContextTool
 from src.utils.config import Config
 from src.utils.runs import create_run_paths, sync_latest_compat_outputs, write_latest_pointer
 from src.validation.citations import CitationVerifier
 from src.validation.multi_agent import MultiAgentReviewer
-from src.skill_system.injection import SkillContextInjector
 from src.skill_system.manager import SkillManager
 from src.skill_system.router import SkillRouter
 from src.skill_system.tools import register_skill_tools
@@ -78,12 +81,15 @@ async def main():
     registry.register(ReadEvidenceTool(kb))
     registry.register(SearchLiteratureTool(config.sciverse_api_token, kb))
     registry.register(ReadContextTool(config.sciverse_api_token, kb))
+    registry.register(ListParsedPapersTool(kb))
+    registry.register(ReadParsedPaperTool(kb))
+    registry.register(SearchParsedPaperTool(kb))
+    registry.register(PrepareSurveyContextTool(kb, llm=llm))
 
     context = ContextBuilder()
     project_root = Path(__file__).resolve().parent
     skills_enabled = os.getenv("SKILLS_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
     skill_trace = None
-    skill_injector = None
     skill_manager = None
     skill_router = None
     if skills_enabled:
@@ -96,20 +102,16 @@ async def main():
         skill_manager = SkillManager(project_root / "skills", external_config=skills_config)
         skill_router = SkillRouter()
         skill_trace = SkillTraceRecorder(skill_trace_path)
-        skill_injector = SkillContextInjector(
-            skill_manager,
-            skill_router,
-            skill_trace,
-            phase="literature_review",
-            topic=topic,
-            enabled=True,
-        )
-        context.add_pre_llm_hook(skill_injector)
         register_skill_tools(registry, skill_manager, skill_router, skill_trace)
 
     verifier = CitationVerifier(kb)
-    ma_enabled = os.getenv("MULTI_AGENT_ENABLED", "true").lower() in {"1", "true", "yes", "on"}
-    reviewer = MultiAgentReviewer(llm, kb, topic=topic, enabled=ma_enabled)
+    reviewer = MultiAgentReviewer(
+        llm,
+        kb,
+        topic=topic,
+        enabled=os.getenv("MULTI_AGENT_ENABLED", "true").lower() in {"1", "true", "yes", "on"},
+        timeout_seconds=int(os.getenv("MULTI_AGENT_REVIEW_TIMEOUT", "45")),
+    )
 
     loop = AgentLoop(
         llm=llm,
@@ -118,25 +120,32 @@ async def main():
         max_iterations=config.max_iterations,
         verbose=True,
     )
-    loop.add_stop_condition(reviewer)   # Multi-agent quality review (3 parallel LLM calls)
-    loop.add_stop_condition(verifier)   # Fast mechanical citation check
+    loop.add_stop_condition(reviewer)
+    loop.add_stop_condition(verifier)
 
     user_message = (
         f"Please generate a comprehensive academic literature survey on the following topic: "
         f"\"{topic}\". \n\n"
-        "Steps:\n"
+        "Required workflow:\n"
         "1. First call build_literature_kb with a broad query for the topic.\n"
         "2. Use list_evidence/read_evidence and optional follow-up search_literature/read_context calls.\n"
-        "3. Write a structured academic survey whose substantive paragraphs cite evidence ids like [P001-E01].\n"
-        "Output in well-formatted Markdown."
+        "3. Seek coverage for definitions, organizing frameworks, major method families, applications, evaluation, "
+        "limitations, and future directions.\n"
+        "4. If Sciverse snippets are not enough for a key claim or comparison, use list_parsed_papers plus "
+        "read_parsed_paper/search_parsed_paper to inspect MinerU parsed original-paper text and create citeable evidence ids.\n"
+        "5. If skill tools are available, inspect and load only the skills needed for the current need "
+        "(research framing, survey writing, citation grounding, or academic polishing). Use skills as writing protocols, "
+        "not as factual evidence, and unload them after use.\n"
+        "6. Call prepare_survey_context to organize the retrieved evidence and design a survey structure. "
+        "If its survey_design.evidence_needs show missing support, call read_context or parsed-paper tools before writing.\n"
+        "7. Then write the complete survey directly in your assistant response. Every substantive paragraph must cite "
+        "existing evidence ids such as [P001-E01]. Do not stop at an outline, notes, or an evidence summary."
     )
 
     try:
         result = await loop.run(user_message)
     finally:
         await llm.close()
-        if skill_injector is not None:
-            skill_injector.unload()
         if skill_trace is not None:
             skill_trace.save()
 

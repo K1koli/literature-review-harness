@@ -1,6 +1,6 @@
 # Literature Review Harness
 
-基于 Intern-S2、Sciverse 和可选 MinerU 的 agentic 文献综述 Harness。核心仍是 LLM 驱动的 Agent Loop，不是固定流水线；新增 Evidence KB 层后，模型只能围绕稳定 evidence id 写作和引用。
+基于 Intern-S2、Sciverse 和可选 MinerU 的 agentic 文献综述 Harness。默认主链路由 AgentLoop 完整负责：检索、构建 evidence KB、按需加载 Skill、构造写作上下文、直接生成最终综述，并通过多智能体审查和引用校验进行返修。
 
 ## 核心设计
 
@@ -11,8 +11,13 @@
   -> LLM 先调用 build_literature_kb
   -> Sciverse semantic/meta 检索并生成 evidence records
   -> MinerU 以快模式尝试解析可访问全文
-  -> LLM 通过 list_evidence/read_evidence/read_context 补证据
-  -> CitationVerifier 检查最终 Markdown 引用
+  -> LLM 通过 list_evidence/read_evidence/read_context 补 Sciverse 证据
+  -> 必要时用 list_parsed_papers/read_parsed_paper/search_parsed_paper 读取 MinerU 解析原文
+  -> LLM 按当前需求使用 skill tools 发现、加载、读取、卸载 Skill
+  -> LLM 调用 prepare_survey_context 形成 timeline/citation map，并由 LLM 生成 outline
+  -> LLM 在 AgentLoop 内直接输出完整 Markdown 综述
+  -> MultiAgentReviewer 三路并行审查内容质量、引用准确性、结构完整性
+  -> CitationVerifier 硬校验最终 Markdown 引用
   -> 可选 OpenAI 图片生成后处理
   -> 输出 output/runs/YYYYMMDD-HHMM-topic/ 运行包
 ```
@@ -77,6 +82,17 @@ python main.py "World Models in deep reinforcement learning"
 | `read_evidence` | 按 evidence id 读取完整证据文本 |
 | `search_literature` | 追加 Sciverse semantic 检索结果为 evidence |
 | `read_context` | 读取 Sciverse 上下文并包装成 evidence |
+| `list_parsed_papers` | 列出已有 MinerU 解析全文的论文 |
+| `read_parsed_paper` | 按 paper_id/offset 读取 MinerU 解析原文片段，并写回 citeable evidence |
+| `search_parsed_paper` | 在 MinerU 解析原文中检索关键词，并把命中片段写回 citeable evidence |
+| `prepare_survey_context` | 从当前 KB 构造 timeline/citation map，并调用 LLM 生成 outline、evidence needs 和 writing plan |
+| `skills_list_index` | 只列出 skill metadata，不加载全文 |
+| `skills_route_for_phase` | 按当前阶段或需求从 metadata 选择候选 skill |
+| `skills_load_for_phase` | 加载当前需要的 skill 指令全文 |
+| `skills_resource_index` | 列出 skill 内 references/templates/assets/scripts |
+| `skills_read_resource` | 按需读取 skill 内资源 |
+| `skills_run_script` | 仅在 skill 显式允许时运行 scripts |
+| `skills_unload` | 清理当前 active skill |
 
 ## 图片生成
 
@@ -139,19 +155,29 @@ literature-review-harness/
 │   │   ├── pipeline.py
 │   │   ├── planner.py
 │   │   └── vector.py
+│   ├── skill_system/
+│   │   ├── manager.py
+│   │   ├── router.py
+│   │   ├── tools.py
+│   │   └── trace.py
 │   ├── state/
 │   │   └── kb.py
 │   ├── tools/
 │   │   ├── literature_kb.py
 │   │   ├── mineru.py
 │   │   ├── registry.py
-│   │   └── sciverse_tools.py
+│   │   ├── sciverse_tools.py
+│   │   └── survey_context.py
 │   ├── utils/
 │   │   └── config.py
-│   └── validation/
-│       └── citations.py
+│   ├── validation/
+│   │   ├── citations.py
+│   │   └── multi_agent.py
 └── tests/
-    └── test_evidence_kb.py
+    ├── test_evidence_kb.py
+    ├── test_skill_system.py
+    ├── test_image_generation.py
+    └── test_multi_agent_review.py
 ```
 
 ## 测试

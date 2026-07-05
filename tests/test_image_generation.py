@@ -84,33 +84,36 @@ class ImageGenerationTest(unittest.TestCase):
         self.assertEqual(methods.evidence_ids, ["P001-E01"])
         self.assertIn("Latent Methods", methods.body)
 
-    def test_pipeline_reports_raster_error_without_key(self) -> None:
-        result = self._run(
-            generate_survey_images(
-                config=Config(image_generation_enabled=True, openai_image_api_key=""),
-                topic="World Models",
-                survey_markdown="# Survey",
-                kb=LiteratureKB(),
-                output_dir=Path("unused"),
-                figure_plans=[
-                    FigurePlan(
-                        figure_id="F001",
-                        title="Conceptual Overview",
-                        caption="Caption.",
-                        target_heading="Survey",
-                        figure_type="conceptual_overview",
-                        render_mode="image",
-                        source_evidence_ids=[],
-                        filename="figure_001_conceptual_overview.png",
-                        prompt="Prompt.",
-                    )
-                ],
+    def test_pipeline_falls_back_to_svg_when_raster_generation_has_no_key(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            result = self._run(
+                generate_survey_images(
+                    config=Config(image_generation_enabled=True, openai_image_api_key=""),
+                    topic="World Models",
+                    survey_markdown="# Survey",
+                    kb=LiteratureKB(),
+                    output_dir=Path(tmp),
+                    figure_plans=[
+                        FigurePlan(
+                            figure_id="F001",
+                            title="Conceptual Overview",
+                            caption="Caption.",
+                            target_heading="Survey",
+                            figure_type="conceptual_overview",
+                            render_mode="image",
+                            source_evidence_ids=[],
+                            filename="figure_001_conceptual_overview.png",
+                            prompt="Prompt.",
+                        )
+                    ],
+                )
             )
-        )
 
-        self.assertIsNone(result.skipped_reason)
-        self.assertEqual(result.generated, [])
-        self.assertIn("OpenAI image API key is required", result.errors[0]["error"])
+            self.assertIsNone(result.skipped_reason)
+            self.assertEqual(len(result.generated), 1)
+            self.assertEqual(result.generated[0].render_mode, "svg")
+            self.assertIn("OpenAI image API key is required", result.errors[0]["error"])
+            self.assertIn("used local SVG fallback", result.errors[1]["error"])
 
     def test_generator_builds_configurable_generation_url(self) -> None:
         generator = OpenAIImageGenerator(

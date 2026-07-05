@@ -62,7 +62,7 @@ class AgentLoop:
         for iteration in range(1, self.max_iterations + 1):
             self._log(f"\n--- Iteration {iteration}/{self.max_iterations} ---")
 
-            # Apply pre-LLM hooks (Skills, Memory injection)
+            # Apply pre-LLM hooks such as context injection or tool filtering.
             msgs, tools = self.context.apply_pre_llm_hooks(messages, tools_schema)
 
             # Call LLM

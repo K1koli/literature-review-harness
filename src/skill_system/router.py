@@ -7,6 +7,11 @@ from .manager import SkillMetadata
 
 PHASE_MAX_SKILLS: dict[str, int] = {
     "literature_review": 4,
+    "framing": 2,
+    "outline": 3,
+    "section_write": 3,
+    "citation_check": 2,
+    "polish": 2,
     "write": 3,
     "verify": 2,
     "figure": 2,
@@ -16,9 +21,15 @@ PHASE_MAX_SKILLS: dict[str, int] = {
 
 PHASE_PREFERRED_SKILLS: dict[str, list[str]] = {
     "literature_review": ["research-framing", "survey-writing", "citation-grounding", "agent-literature-review"],
+    "framing": ["research-framing", "craft-of-research", "agent-literature-review"],
+    "outline": ["survey-writing", "research-framing", "agent-survey-generation", "agent-literature-review"],
+    "section_write": ["survey-writing", "citation-grounding", "agent-survey-generation", "agent-related-work-writing"],
+    "citation_check": ["citation-grounding", "agent-citation-management", "agent-literature-review"],
+    "polish": ["academic-polishing", "agent-paper-revision", "agent-self-review", "nature-polishing"],
     "write": ["survey-writing", "agent-survey-generation", "agent-related-work-writing"],
     "verify": ["citation-grounding", "agent-literature-review"],
     "figure": ["agent-figure-generation"],
+    "export": ["latex-arxiv-export", "arxiv-paper-writer"],
 }
 
 

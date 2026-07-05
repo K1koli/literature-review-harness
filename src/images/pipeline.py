@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import re
@@ -106,14 +107,33 @@ async def generate_survey_images(
                 if generator is None:
                     raise ValueError("OpenAI image API key is required for raster image figures")
                 try:
-                    generated = await generator.generate(spec, image_dir)
+                    generated = await asyncio.wait_for(
+                        generator.generate(spec, image_dir),
+                        timeout=max(config.image_generation_timeout, 1),
+                    )
                 except Exception as exc:
                     if not _is_policy_retryable(exc):
                         raise
-                    generated = await generator.generate(_safe_image_retry_spec(spec), image_dir)
+                    retry_spec = _safe_image_retry_spec(spec)
+                    generated = await asyncio.wait_for(
+                        generator.generate(retry_spec, image_dir),
+                        timeout=max(config.image_generation_timeout, 1),
+                    )
             result.generated.append(generated)
         except Exception as exc:
             result.errors.append({"figure_id": spec.figure_id, "error": str(exc)})
+            if spec.render_mode != "svg":
+                try:
+                    fallback = render_svg_figure(_svg_fallback_spec(spec), kb, image_dir)
+                    result.generated.append(fallback)
+                    result.errors.append(
+                        {
+                            "figure_id": spec.figure_id,
+                            "error": "raster image generation failed; used local SVG fallback",
+                        }
+                    )
+                except Exception as fallback_exc:
+                    result.errors.append({"figure_id": spec.figure_id, "error": f"svg fallback failed: {fallback_exc}"})
 
     image_dir.mkdir(parents=True, exist_ok=True)
     manifest_path.write_text(json.dumps(result.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
@@ -173,19 +193,31 @@ def _is_policy_retryable(exc: Exception) -> bool:
 
 def _safe_image_retry_spec(spec: FigurePlan) -> FigurePlan:
     prompt = f"""
-Create a clean abstract academic diagram for a literature survey.
+Create a clean academic diagram for a literature survey.
 
 Figure title: {spec.title}
 Target section: {spec.target_heading}
 
 Use a non-photorealistic vector-infographic look rendered as a raster image.
-Show a simple flow with geometric shapes and arrows:
-observations -> latent model -> imagined futures -> planning -> evaluation.
+Show the section's organizing logic with simple geometric shapes, clusters, and arrows.
 
 Constraints:
-- Use at most six short labels: Observations, Latent Model, Dynamics, Simulation, Planning, Evaluation.
+- Use at most six short generic labels.
 - Do not include people, faces, vehicles, medical imagery, brands, logos, screenshots, code, equations, citations, author names, paper titles, or numeric claims.
 - Keep the image calm, readable, and suitable for a conference paper.
 - Leave generous whitespace and avoid dense text.
 """.strip()
     return replace(spec, prompt=prompt)
+
+
+def _svg_fallback_spec(spec: FigurePlan) -> FigurePlan:
+    filename = re.sub(r"\.[A-Za-z0-9]+$", ".svg", spec.filename)
+    if filename == spec.filename:
+        filename = spec.filename + ".svg"
+    return replace(
+        spec,
+        render_mode="svg",
+        figure_type="method_taxonomy",
+        filename=filename,
+        prompt=spec.prompt or spec.caption or spec.title,
+    )

@@ -40,12 +40,13 @@ class CitationVerifier:
         if not known_ids:
             errors.append({"issue": "empty_evidence_kb", "message": "build_literature_kb must run before final survey"})
 
-        paragraphs = [part.strip() for part in re.split(r"\n\s*\n", text) if part.strip()]
+        body_text = self._body_without_references(text)
+        paragraphs = [part.strip() for part in re.split(r"\n\s*\n", body_text) if part.strip()]
         for index, paragraph in enumerate(paragraphs, start=1):
             if self._should_skip_paragraph(paragraph):
                 continue
             if not EVIDENCE_ID_RE.search(paragraph):
-                warnings.append(
+                errors.append(
                     {
                         "issue": "missing_evidence_citation",
                         "paragraph": index,
@@ -88,11 +89,25 @@ class CitationVerifier:
             return True
         if stripped.startswith("```"):
             return True
+        if stripped.startswith("!["):
+            return True
+        if stripped.startswith("<figure") or stripped.startswith("</figure"):
+            return True
+        lines = [line.strip() for line in stripped.splitlines() if line.strip()]
+        if lines and all(line.startswith("|") for line in lines):
+            return True
         if stripped.lower().startswith(("references", "参考文献")):
             return True
         if len(stripped) < 80:
             return True
         return False
+
+    @staticmethod
+    def _body_without_references(text: str) -> str:
+        match = re.search(r"(?im)^#{1,6}\s+(references|参考文献)\s*$", text)
+        if not match:
+            return text
+        return text[: match.start()]
 
     def report_dict(self) -> dict[str, Any]:
         return {

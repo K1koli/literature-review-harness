@@ -41,11 +41,14 @@ class SkillListIndexTool:
 
 class SkillRouteForPhaseTool:
     name = "skills_route_for_phase"
-    description = "Select skill names for a phase from metadata only, before loading full skill instructions."
+    description = (
+        "Select skill names from metadata only, before loading full skill instructions. "
+        "The phase may be a fixed harness phase or a current need label such as write, verify, polish, figure, or export."
+    )
     parameters = {
         "type": "object",
         "properties": {
-            "phase": {"type": "string", "description": "Harness phase, e.g. literature_review, write, verify."},
+            "phase": {"type": "string", "description": "Harness phase or current need label, e.g. literature_review, write, verify, polish."},
             "topic": {"type": "string", "description": "Current review topic.", "default": ""},
             "roles": {"type": "array", "items": {"type": "string"}, "description": "Optional role override."},
         },
@@ -82,11 +85,14 @@ class SkillRouteForPhaseTool:
 
 class SkillLoadForPhaseTool:
     name = "skills_load_for_phase"
-    description = "Load full skill instructions for a phase after metadata routing."
+    description = (
+        "Load full skill instructions after metadata routing for the current phase or need. "
+        "Load only the skills needed now, then call skills_unload after use."
+    )
     parameters = {
         "type": "object",
         "properties": {
-            "phase": {"type": "string", "description": "Harness phase."},
+            "phase": {"type": "string", "description": "Harness phase or current need label."},
             "topic": {"type": "string", "description": "Current topic.", "default": ""},
             "roles": {"type": "array", "items": {"type": "string"}, "description": "Optional role override."},
         },

@@ -10,6 +10,11 @@ from typing import Any
 PHASE_ROLES: dict[str, list[str]] = {
     "literature_review": ["research_framing", "survey_writing", "citation_grounding", "self_review", "academic_polishing"],
     "retrieve": ["academic_search"],
+    "framing": ["research_framing"],
+    "outline": ["survey_writing", "research_framing"],
+    "section_write": ["survey_writing", "citation_grounding"],
+    "citation_check": ["citation_grounding"],
+    "polish": ["academic_polishing", "paper_revision", "self_review"],
     "write": ["research_framing", "survey_writing"],
     "verify": ["citation_grounding"],
     "revise": ["paper_revision", "academic_polishing", "self_review"],
@@ -192,6 +197,8 @@ class SkillManager:
                 continue
             raw_path = Path(str(item.get("path", ""))).expanduser()
             path = raw_path if raw_path.is_absolute() else (self.external_config.parent.parent / raw_path)
+            if not _is_inside(path, self.skill_dir):
+                continue
             skill_path = _skill_file(path)
             if not skill_path:
                 continue
@@ -386,6 +393,14 @@ def _safe_child(root: Path, relative_path: str) -> Path:
     if root != path and root not in path.parents:
         raise PermissionError(f"Path escapes skill root: {relative_path}")
     return path
+
+
+def _is_inside(path: Path, root: Path) -> bool:
+    try:
+        path.resolve().relative_to(root.resolve())
+        return True
+    except ValueError:
+        return False
 
 
 def _script_command(script: Path, args: list[str]) -> list[str]:

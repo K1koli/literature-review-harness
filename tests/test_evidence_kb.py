@@ -1,11 +1,14 @@
 import asyncio
 import io
+import json
 import unittest
 import zipfile
 from unittest.mock import patch
 
 from src.state.kb import LiteratureKB
+from src.tools.literature_kb import ListParsedPapersTool, ReadParsedPaperTool, SearchParsedPaperTool
 from src.tools.mineru import MinerUConfig, mineru_evidence_chunks, run_mineru_for_kb
+from src.tools.survey_context import PrepareSurveyContextTool
 from src.validation.citations import CitationVerifier
 
 
@@ -43,6 +46,74 @@ class EvidenceKBTest(unittest.TestCase):
         self.assertIsNone(kb.find_by_doc_id("doc-b"))
         self.assertEqual(kb.find_by_doc_id("doc-a"), first)
         self.assertEqual([item.paper_id for item in kb.evidence], ["P001"])
+
+    def test_prepare_survey_context_returns_structure_and_citation_map(self) -> None:
+        kb = LiteratureKB()
+        first = kb.upsert_paper(title="World Models", year=2018)
+        second = kb.upsert_paper(title="Benchmarking World Models", year=2024)
+        kb.add_evidence(
+            first,
+            text="World models learn latent representations and dynamics for planning in simulated environments.",
+            source="sciverse_semantic",
+        )
+        kb.add_evidence(
+            second,
+            text="Evaluation benchmarks compare performance, limitations, and generalization of model-based agents.",
+            source="sciverse_semantic",
+        )
+
+        payload = json.loads(asyncio.run(PrepareSurveyContextTool(kb).execute(max_evidence=10)))
+
+        self.assertIn("timeline", payload)
+        self.assertIn("citation_map", payload)
+        self.assertNotIn("taxonomy", payload)
+        self.assertNotIn("recommended_outline", payload)
+        self.assertEqual(payload["outline_status"], "llm_unavailable")
+        self.assertEqual(payload["citation_map"][0]["evidence_id"], "P001-E01")
+        self.assertEqual(payload["citation_map"][1]["evidence_id"], "P002-E01")
+
+    def test_prepare_survey_context_sanitizes_llm_design(self) -> None:
+        class FakeLLM:
+            async def chat(self, messages, tools=None):
+                return {
+                    "content": json.dumps(
+                        {
+                            "selected_papers": [{"paper_id": "P001", "reason": "central"}],
+                            "low_relevance_papers": [{"paper_id": "P999", "reason": "invented"}],
+                            "evidence_needs": [
+                                {
+                                    "need": "More benchmark evidence",
+                                    "suggested_tools": ["read_context", "external_library"],
+                                }
+                            ],
+                            "recommended_outline": [
+                                {
+                                    "section": "Introduction",
+                                    "purpose": "Define scope and motivation",
+                                }
+                            ],
+                            "writing_plan": "Synthesize rather than enumerate.",
+                        }
+                    )
+                }
+
+        kb = LiteratureKB()
+        paper = kb.upsert_paper(title="World Models", year=2018)
+        kb.add_evidence(
+            paper,
+            text="World models learn latent representations and dynamics for planning.",
+            source="sciverse_semantic",
+        )
+
+        payload = json.loads(asyncio.run(PrepareSurveyContextTool(kb, llm=FakeLLM()).execute()))
+
+        self.assertEqual(payload["recommended_outline"], ["Introduction: Define scope and motivation"])
+        self.assertEqual(payload["outline_status"], "generated_by_llm")
+        self.assertEqual(payload["survey_design"]["low_relevance_papers"], [])
+        self.assertEqual(
+            payload["survey_design"]["evidence_needs"][0]["suggested_tools"],
+            ["read_context"],
+        )
 
 
 class MinerUTest(unittest.TestCase):
@@ -122,8 +193,32 @@ class MinerUTest(unittest.TestCase):
         self.assertEqual(report["done"], 1)
         self.assertEqual(paper.mineru["state"], "done")
         self.assertTrue(paper.mineru["structured_ingested"])
+        self.assertIsNotNone(kb.get_parsed_document("P001"))
         self.assertEqual(kb.evidence[0].source, "mineru_structured")
         self.assertIn("world model", kb.evidence[0].text)
+
+    def test_parsed_paper_tools_read_and_search_mineru_text_as_evidence(self) -> None:
+        kb = LiteratureKB()
+        paper = kb.upsert_paper(title="World Models", year=2018)
+        kb.set_parsed_document(
+            paper,
+            text=(
+                "Introduction explains latent dynamics for planning.\n\n"
+                "Evaluation discusses limitations, benchmark generalization, and model-based agents."
+            ),
+            source="mineru",
+            metadata={"markdown_path": "paper/full.md"},
+        )
+
+        listed = asyncio.run(ListParsedPapersTool(kb).execute())
+        read = asyncio.run(ReadParsedPaperTool(kb).execute("P001", offset=0, limit=80))
+        searched = asyncio.run(SearchParsedPaperTool(kb).execute("P001", query="limitations benchmark", max_hits=2))
+
+        self.assertIn("World Models", listed)
+        self.assertIn("P001-E01", read)
+        self.assertIn("P001-E02", searched)
+        self.assertEqual(kb.evidence[0].source, "mineru_parsed_read")
+        self.assertEqual(kb.evidence[1].source, "mineru_parsed_search")
 
 
 class CitationVerifierTest(unittest.TestCase):
@@ -157,6 +252,56 @@ class CitationVerifierTest(unittest.TestCase):
         self.assertEqual(passing.status, "pass")
         self.assertEqual(failing.status, "fail")
         self.assertEqual(failing.errors[0]["issue"], "missing_evidence_citation")
+
+    def test_skips_markdown_table_blocks_for_paragraph_citation_check(self) -> None:
+        kb = LiteratureKB()
+        paper = kb.upsert_paper(title="World Models")
+        evidence = kb.add_evidence(paper, text=" ".join(["world"] * 40), source="sciverse_semantic")
+        assert evidence is not None
+
+        report = CitationVerifier(kb).validate_text(
+            "# Survey\n\n"
+            f"This evidence-backed paragraph is long enough to be checked and cites a known source [{evidence.evidence_id}].\n\n"
+            "| Approach | Use |\n"
+            "|---|---|\n"
+            "| Latent dynamics | Planning |\n"
+        )
+
+        self.assertEqual(report.status, "pass")
+
+    def test_does_not_require_evidence_ids_inside_references_section(self) -> None:
+        kb = LiteratureKB()
+        paper = kb.upsert_paper(title="World Models")
+        evidence = kb.add_evidence(paper, text=" ".join(["world"] * 40), source="sciverse_semantic")
+        assert evidence is not None
+
+        report = CitationVerifier(kb).validate_text(
+            "# Survey\n\n"
+            f"This evidence-backed paragraph is long enough to be checked and cites a known source [{evidence.evidence_id}].\n\n"
+            "## References\n\n"
+            "P001: World Models (2018)\n"
+            "P002: Another long reference entry that should not be treated as unsupported survey prose.\n"
+        )
+
+        self.assertEqual(report.status, "pass")
+
+    def test_skips_figure_markup_for_paragraph_citation_check(self) -> None:
+        kb = LiteratureKB()
+        paper = kb.upsert_paper(title="World Models")
+        evidence = kb.add_evidence(paper, text=" ".join(["world"] * 40), source="sciverse_semantic")
+        assert evidence is not None
+
+        report = CitationVerifier(kb).validate_text(
+            "# Survey\n\n"
+            "## Introduction\n\n"
+            "<figure id=\"F001\">\n\n"
+            "![Long Generated Figure Title That Would Otherwise Be Treated As A Paragraph](figures/figure.png)\n\n"
+            f"<figcaption>Sources: {evidence.evidence_id}.</figcaption>\n\n"
+            "</figure>\n\n"
+            f"This evidence-backed paragraph is long enough to be checked and cites a known source [{evidence.evidence_id}].\n"
+        )
+
+        self.assertEqual(report.status, "pass")
 
 
 if __name__ == "__main__":
