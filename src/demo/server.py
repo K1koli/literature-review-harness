@@ -16,7 +16,7 @@ from typing import Any
 from urllib.parse import unquote, urlparse
 
 from src.demo.artifacts import build_summary, load_review_payload
-from src.demo.pdf import write_review_pdf
+from src.demo.pdf import write_pdf_page_previews, write_review_pdf
 from src.exporters import export_html, export_latex
 from src.review_runner import ConfigError, run_literature_review
 
@@ -302,6 +302,7 @@ def _finalize_artifacts(state: RunState) -> None:
         topic=state.topic,
         output_path=state.output_dir / "survey.pdf",
     )
+    page_previews = write_pdf_page_previews(state.output_dir / "survey.pdf", state.output_dir / "pdf_pages")
     state.add_event({"type": "pdf_ready", "path": str(state.output_dir / "survey.pdf")})
     state.complete(
         {
@@ -311,6 +312,7 @@ def _finalize_artifacts(state: RunState) -> None:
                 "evidence_count": summary["evidence_count"],
                 "cited_evidence_count": summary["cited_evidence_count"],
                 "citation_status": summary["citation_status"],
+                "pdf_preview_pages": len(page_previews),
             },
         }
     )

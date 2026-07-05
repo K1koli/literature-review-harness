@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import html
 import re
+import shutil
+import subprocess
 import textwrap
 from pathlib import Path
 from typing import Any
@@ -26,6 +28,39 @@ def write_review_pdf(
         )
     except Exception:
         _write_basic_pdf(markdown=markdown, topic=topic, output_path=output_path)
+
+
+def write_pdf_page_previews(pdf_path: Path, output_dir: Path, *, max_pages: int = 8) -> list[Path]:
+    """Render PDF pages to PNG files for browsers that cannot embed PDFs."""
+
+    pdftoppm = shutil.which("pdftoppm")
+    if not pdftoppm or not pdf_path.exists():
+        return []
+    output_dir.mkdir(parents=True, exist_ok=True)
+    for old_page in output_dir.glob("page-*.png"):
+        old_page.unlink()
+    prefix = output_dir / "page"
+    try:
+        subprocess.run(
+            [
+                pdftoppm,
+                "-png",
+                "-r",
+                "144",
+                "-f",
+                "1",
+                "-l",
+                str(max(1, max_pages)),
+                str(pdf_path),
+                str(prefix),
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+    except Exception:
+        return []
+    return sorted(output_dir.glob("page-*.png"))
 
 
 def _write_reportlab_pdf(

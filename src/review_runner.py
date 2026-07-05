@@ -33,6 +33,7 @@ from src.utils.config import Config
 from src.utils.runs import create_run_paths, sync_latest_compat_outputs, write_latest_pointer
 from src.validation.citations import CitationVerifier
 from src.validation.multi_agent import MultiAgentReviewer
+from src.validation.references import format_numbered_references
 from src.validation.repair import repair_missing_evidence_citations
 
 
@@ -227,6 +228,8 @@ async def run_literature_review(
     if skill_trace is not None:
         skill_trace.save()
 
+    formatted_result = format_numbered_references(survey_path.read_text(encoding="utf-8"), kb)
+    survey_path.write_text(formatted_result, encoding="utf-8")
     html_path = run_paths.survey_html
     tex_path = run_paths.survey_tex
     export_html(survey_path, html_path, title=topic)

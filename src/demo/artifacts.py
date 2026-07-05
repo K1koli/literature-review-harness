@@ -19,6 +19,8 @@ def load_review_payload(run_id: str, output_dir: Path, topic: str, status: str, 
     trace_path = output_dir / "skill_trace.json"
     figure_plan_path = output_dir / "figure_plan.json"
     pdf_path = output_dir / "survey.pdf"
+    pdf_pages_dir = output_dir / "pdf_pages"
+    pdf_pages = sorted(pdf_pages_dir.glob("page-*.png")) if pdf_pages_dir.exists() else []
 
     markdown = survey_path.read_text(encoding="utf-8") if survey_path.exists() else ""
     evidence_pack = _read_json(evidence_path, {"papers": [], "evidence": []})
@@ -40,6 +42,10 @@ def load_review_payload(run_id: str, output_dir: Path, topic: str, status: str, 
             "latex": f"/api/reviews/{run_id}/download/survey.tex" if tex_path.exists() else "",
             "pdf": f"/api/reviews/{run_id}/download/survey.pdf" if pdf_path.exists() else "",
             "pdf_preview": f"/api/reviews/{run_id}/preview/survey.pdf" if pdf_path.exists() else "",
+            "pdf_pages": [
+                f"/api/reviews/{run_id}/asset/pdf_pages/{page.name}"
+                for page in pdf_pages
+            ],
             "evidence": f"/api/reviews/{run_id}/download/evidence_pack.json" if evidence_path.exists() else "",
             "check_report": f"/api/reviews/{run_id}/download/check_report.json" if check_path.exists() else "",
             "skill_trace": f"/api/reviews/{run_id}/download/skill_trace.json" if trace_path.exists() else "",
@@ -106,7 +112,7 @@ def build_summary(
         "year_counts": _counter_rows(year_counts, numeric_labels=True),
         "mineru_counts": _counter_rows(mineru_counts),
         "paper_rows": paper_rows,
-        "cited_evidence": cited_evidence[:80],
+        "cited_evidence": cited_evidence,
         "section_count": len(re.findall(r"^##\s+", markdown, flags=re.MULTILINE)),
         "word_count": len(re.findall(r"\b\w+\b", markdown)),
         "skill_trace": skill_trace or [],

@@ -15,6 +15,7 @@ const els = {
   answerPanel: document.getElementById("answerPanel"),
   markdownView: document.getElementById("markdownView"),
   pdfView: document.getElementById("pdfView"),
+  pdfPages: document.getElementById("pdfPages"),
   pdfObject: document.getElementById("pdfObject"),
   evidenceFocus: document.getElementById("evidenceFocus"),
   paperCount: document.getElementById("paperCount"),
@@ -118,7 +119,7 @@ async function loadRun(runId) {
     els.answerPanel.hidden = false;
   }
   if (payload.downloads?.pdf_preview) {
-    els.pdfObject.data = payload.downloads.pdf_preview;
+    renderPdfPreview(payload.downloads);
   }
   scrollToBottom();
 }
@@ -137,7 +138,10 @@ function resetRun(topic) {
   els.tracePanel.open = true;
   els.answerPanel.hidden = true;
   els.markdownView.innerHTML = "";
+  els.pdfPages.innerHTML = "";
+  els.pdfPages.hidden = false;
   els.pdfObject.removeAttribute("data");
+  els.pdfObject.hidden = true;
   els.evidenceFocus.hidden = true;
   els.evidenceFocus.innerHTML = "";
   renderMetrics({});
@@ -206,6 +210,23 @@ function renderDownloads(downloads) {
   setLink(els.downloadTex, downloads.latex);
   setLink(els.downloadPdf, downloads.pdf);
   setLink(els.downloadEvidence, downloads.evidence);
+}
+
+function renderPdfPreview(downloads) {
+  const pages = Array.isArray(downloads.pdf_pages) ? downloads.pdf_pages : [];
+  if (pages.length) {
+    els.pdfObject.hidden = true;
+    els.pdfObject.removeAttribute("data");
+    els.pdfPages.hidden = false;
+    els.pdfPages.innerHTML = pages
+      .map((src, index) => `<img src="${escapeHtml(src)}" alt="PDF page ${index + 1}" loading="lazy" />`)
+      .join("");
+    return;
+  }
+  els.pdfPages.innerHTML = "";
+  els.pdfPages.hidden = true;
+  els.pdfObject.hidden = false;
+  els.pdfObject.data = downloads.pdf_preview;
 }
 
 function setLink(link, href) {
